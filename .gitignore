@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+build/
+build_*/
+dist/
+dist_t/
+*.spec.bak
+vanta_config.json
+vanta_go_config.json
+*.log
