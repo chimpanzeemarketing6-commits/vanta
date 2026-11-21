@@ -56,6 +56,54 @@ os.makedirs(f"{S}/sys/class/drm/card0/device"); open(f"{S}/sys/class/drm/card0/d
 os.makedirs(f"{S}/proc/4242")
 open(f"{S}/proc/4242/cmdline", "wb").write(b"/home/deck/.local/share/Steam/ubuntu12_32/reaper\x00SteamLaunch\x00AppId=1145360\x00--\x00hades")
 open(f"{S}/proc/stat", "w").write("cpu  1000 0 500 8000 100 0 0 0 0 0\n")
-open(f"{S}/proc/meminfo", "w").write("MemTotal:       16000000 kB\nMemAvailable:    9100000 kB\n")
+open(f"{S}/proc/meminfo", "w").write("MemTotal:       16000000 kB\nMemAvailable:    6100000 kB\nCached:          2400000 kB\n"
+                                     "Buffers:          100000 kB\nSwapTotal:       8000000 kB\nSwapFree:        7400000 kB\n")
+# fake processes for the RAM page: two apps to close, plus things that must never be listed
+def proc(pid, ppid, name, rss_mb, cmd):
+    d = f"{S}/proc/{pid}"; os.makedirs(d, exist_ok=True)
+    open(f"{d}/stat", "w").write(f"{pid} ({name}) S {ppid} 1 1 0")
+    open(f"{d}/status", "w").write(f"Name:\t{name}\nVmRSS:\t{int(rss_mb * 1024)} kB\n")
+    open(f"{d}/cmdline", "wb").write(cmd.replace(" ", "\x00").encode())
+proc(4243, 4242, "Hades.exe", 2100, "Z:/Hades/x64/Hades.exe")          # the running game: never listed
+proc(900, 1, "steamwebhelper", 900, "/home/deck/.local/share/Steam/ubuntu12_64/steamwebhelper")
+proc(901, 1, "plasmashell", 420, "/usr/bin/plasmashell")
+proc(1200, 1, "firefox", 780, "/usr/lib/firefox/firefox")
+proc(1201, 1200, "Isolated Web Co", 310, "/usr/lib/firefox/firefox -contentproc")
+proc(1300, 1, "Discord", 520, "/opt/discord/Discord")
+proc(1400, 1, "heroic", 260, "/opt/Heroic/heroic")
+proc(1500, 1, "tiny", 5, "/usr/bin/tiny")
+# Steam config: Proton for one game, the default for the rest; launch options for another
+cfgd = f"{steam}/config"; os.makedirs(cfgd, exist_ok=True)
+open(f"{cfgd}/config.vdf", "w").write('"InstallConfigStore"\n{\n\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n\t\t\t"Steam"\n\t\t\t{\n'
+    '\t\t\t\t"CompatToolMapping"\n\t\t\t\t{\n\t\t\t\t\t"0"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"proton_9"\n\t\t\t\t\t}\n'
+    '\t\t\t\t\t"1091500"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"GE-Proton9-20"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n')
+lcp = f"{ud}/localconfig.vdf"
+t = open(lcp).read().replace('"Playtime"\t\t"900"', '"Playtime"\t\t"900"\n\t\t\t\t\t\t"LaunchOptions"\t\t"PROTON_ENABLE_FSR=1 %command%"')
+open(lcp, "w").write(t)
+# screenshots
+for i, (aid, n) in enumerate(((1245620, 7), (1145360, 4), (1091500, 3))):
+    sdir = f"{steam}/userdata/123456/760/remote/{aid}/screenshots"
+    for j in range(n):
+        p_ = f"{sdir}/2026112{j}{i}0000_1.jpg"
+        art(p_, 1280, 800, f"shot {j}", (i * 0.3 + j * 0.07) % 1)
+        os.utime(p_, (time.time() - (i * 5 + j) * 40000,) * 2)
+        if j % 2 == 0:
+            art(f"{sdir}/thumbnails/2026112{j}{i}0000_1.jpg", 200, 125, "t", (i * 0.3 + j * 0.07) % 1)
+# a seed config with a few weeks of sessions, ratings and battery data
+import json
+rnd = random.Random(3)
+sess = []
+names = {1245620: "ELDEN RING", 1145360: "Hades", 1091500: "Cyberpunk 2077", 413150: "Stardew Valley", 2379780: "Balatro",
+         367520: "Hollow Knight", 504230: "Celeste"}
+for d in range(110):
+    if rnd.random() < 0.55:
+        for _ in range(rnd.randint(1, 2)):
+            aid = rnd.choice(list(names))
+            st = time.time() - d * 86400 - rnd.randint(0, 20) * 3600
+            sess.append({"appid": str(aid), "name": names[aid], "start": st, "dur": rnd.randint(15, 200) * 60})
+sess.sort(key=lambda x: -x["start"])
+json.dump({"sessions": sess, "ratings": {"steam:1245620": 5, "steam:504230": 4, "steam:2379780": 5},
+           "finished": {"steam:504230": {"t": time.time(), "name": "Celeste"}},
+           "power": {"1145360": [14.2 * 600, 600], "1245620": [21.5 * 900, 900]}}, open("/tmp/deck_seed.json", "w"))
 open(f"{S}/proc/uptime", "w").write("15234.2 50000.1")
 print("fake ready")

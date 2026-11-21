@@ -26,7 +26,7 @@ HOME = os.path.expanduser("~")
 DATA = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "vanta-deck")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "vanta-deck")
 SYS = os.environ.get("VANTA_SYS_ROOT", "")  # tests point this at a fake /sys and /proc
-UA = "VantaDeck/1.0 (+SteamOS)"
+UA = "VantaDeck/1.1 (+SteamOS)"
 
 TOOL_NAMES = re.compile(r"^(proton|steam linux runtime|steamworks common|steamvr|steam audio|"
                         r"directx|vc\+\+|easy anti-cheat|battleye)", re.I)
@@ -115,7 +115,8 @@ def ago(t):
 # =====================================================================  config
 DEFAULTS = {"theme": "Vanta", "animations": True, "start_tab": "home", "fahrenheit": False, "art_fetch": True,
             "sessions": [], "notes": {}, "queue": [], "finished": {}, "favorites": [], "home_sel": None,
-            "lib_filter": "all", "lib_sort": "recent", "welcomed": False, "ui_scale": 100}
+            "lib_filter": "all", "lib_sort": "recent", "welcomed": False, "ui_scale": 100, "ratings": {}, "power": {},
+            "play_range": "month", "shots_game": None}
 
 
 class Config(dict):
@@ -263,6 +264,63 @@ def local_apps(udir):
     return out
 
 
+def app_extras(udir):
+    """{appid: {"opts": launch options, "wk2": minutes in the last two weeks}} from Steam's local config."""
+    text = read(os.path.join(udir, "config", "localconfig.vdf")) if udir else None
+    apps = ci(parse_vdf(text), "UserLocalConfigStore", "Software", "Valve", "Steam", "apps") or {} if text else {}
+    out = {}
+    for a, v in apps.items():
+        if isinstance(v, dict):
+            try:
+                wk2 = int(ci(v, "Playtime2wks") or 0)
+            except ValueError:
+                wk2 = 0
+            out[str(a)] = {"opts": ci(v, "LaunchOptions") or "", "wk2": wk2}
+    return out
+
+
+def compat_tools(root):
+    """{appid: compatibility tool} from Steam's config ("0" is the default for every game)."""
+    text = read(os.path.join(root, "config", "config.vdf")) if root else None
+    m = ci(parse_vdf(text), "InstallConfigStore", "Software", "Valve", "Steam", "CompatToolMapping") or {} if text else {}
+    return {str(a): ci(v, "name") for a, v in m.items() if isinstance(v, dict) and ci(v, "name")}
+
+
+def tool_label(name):
+    if not name:
+        return None
+    n = name.lower()
+    if n == "proton_experimental":
+        return "Proton Experimental"
+    if n == "proton_hotfix":
+        return "Proton Hotfix"
+    m = re.match(r"proton_(\d+)$", n)
+    if m:  # proton_63 is 6.3 and proton_513 is 5.13, but proton_9 and proton_10 are 9 and 10
+        v = m.group(1)
+        return f"Proton {v[0]}.{v[1:]}" if int(v) >= 30 else f"Proton {v}"
+    if n.startswith("steamlinuxruntime"):
+        return "Steam Linux Runtime"
+    return name
+
+
+def screenshots(udir):
+    """Your Steam screenshots, newest first: [{appid, path, thumb, t}]."""
+    out = []
+    if not udir:
+        return out
+    for d in glob.glob(os.path.join(udir, "760", "remote", "*", "screenshots")):
+        appid = os.path.basename(os.path.dirname(d))
+        for p in glob.glob(os.path.join(d, "*.jpg")) + glob.glob(os.path.join(d, "*.png")):
+            th = os.path.join(d, "thumbnails", os.path.basename(p))
+            try:
+                t = os.path.getmtime(p)
+            except OSError:
+                continue
+            out.append({"appid": appid, "path": p, "thumb": th if os.path.exists(th) else p, "t": t})
+    out.sort(key=lambda x: -x["t"])
+    return out
+
+
 def shortcut_list(udir):
     path = os.path.join(udir, "config", "shortcuts.vdf") if udir else None
     if not path or not os.path.exists(path):
@@ -333,6 +391,8 @@ def scan_library():
         return [], None
     udir = user_dir(root)
     local = local_apps(udir)
+    extras = app_extras(udir)
+    tools = compat_tools(root)
     games, seen = [], set()
     for lib in library_folders(root):
         for acf in glob.glob(os.path.join(lib, "steamapps", "appmanifest_*.acf")):
@@ -346,13 +406,16 @@ def scan_library():
             games.append({"id": f"steam:{appid}", "appid": appid, "name": name, "source": "Steam", "lib": lib,
                           "size": int(ci(st, "SizeOnDisk") or 0), "last": last, "minutes": mins,
                           "installdir": ci(st, "installdir") or "", "updating": not flags & 4 or bool(flags & 2),
-                          "launch": f"steam://rungameid/{appid}",
+                          "launch": f"steam://rungameid/{appid}", "opts": extras.get(appid, {}).get("opts", ""),
+                          "wk2": extras.get(appid, {}).get("wk2", 0),
+                          "tool": tool_label(tools.get(appid)), "tool_default": tool_label(tools.get("0")),
                           "cover": find_art(root, udir, appid), "hero": find_art(root, udir, appid, "hero")})
     for sc in shortcut_list(udir):
         gid = (sc["appid"] << 32) | 0x02000000
         games.append({"id": f"sc:{sc['appid']}", "appid": str(sc["appid"]), "name": sc["name"], "source": "Non-Steam",
                       "lib": None, "size": 0, "last": sc["last"], "minutes": 0, "installdir": "", "updating": False,
-                      "launch": f"steam://rungameid/{gid}", "cover": find_art(root, udir, sc["appid"]),
+                      "launch": f"steam://rungameid/{gid}", "opts": "", "wk2": 0, "tool": tool_label(tools.get(str(sc["appid"]))),
+                      "tool_default": None, "cover": find_art(root, udir, sc["appid"]),
                       "hero": find_art(root, udir, sc["appid"], "hero")})
     return games, {"root": root, "udir": udir}
 
@@ -695,3 +758,96 @@ class Joystick:
                     if state and held.get(num) != state:
                         self.cb(dirs[0] if state < 0 else dirs[1])
                     held[num] = state
+
+
+# =====================================================================  memory (RAM)
+# Never offered for closing: Steam, the Game Mode / desktop session and system services. A running game is
+# left alone too (everything started under Steam's "reaper").
+KEEP = re.compile(r"^(steam|steamwebhelper|steam-runtime.*|steamos.*|gamescope.*|xwayland|xorg|systemd.*|dbus.*|pipewire.*|"
+                  r"wireplumber|pulseaudio|plasmashell|kwin.*|ksmserver|kded.*|kglobalaccel.*|xdg-.*|at-spi.*|polkit.*|"
+                  r"sddm.*|startplasma.*|plasma_session|baloo.*|powerdevil.*|reaper|pressure-vessel.*|srt-bwrap|bwrap|"
+                  r"wine.*|.*\.exe|bash|sh|zsh|fish|sudo|ssh.*|gpg-agent|mangoapp|inputplumber|hhd.*|jupiter-.*|"
+                  r"vanta.*|python3?.*)$", re.I)
+
+
+def memory_info():
+    m = {}
+    for line in (read("/proc/meminfo") or "").splitlines():
+        k, _, v = line.partition(":")
+        try:
+            m[k] = int(v.split()[0]) * 1024
+        except (ValueError, IndexError):
+            pass
+    if "MemTotal" not in m:
+        return None
+    return {"total": m["MemTotal"], "avail": m.get("MemAvailable", 0), "cached": m.get("Cached", 0) + m.get("Buffers", 0),
+            "swap_total": m.get("SwapTotal", 0), "swap_used": m.get("SwapTotal", 0) - m.get("SwapFree", 0)}
+
+
+def memory_apps(min_bytes=40 * 2**20):
+    """Your own background apps by memory use: [{name, pids, rss}], biggest first. Steam, the session, system services,
+    shells and anything a running game started are left out."""
+    procs = {}
+    me = os.getpid()
+    for d in glob.glob((SYS or "") + "/proc/[0-9]*"):
+        pid = int(os.path.basename(d))
+        try:
+            if os.stat(d).st_uid != os.getuid():
+                continue
+        except OSError:
+            continue
+        st = read(f"/proc/{pid}/stat") or ""
+        status = read(f"/proc/{pid}/status") or ""
+        try:
+            ppid = int(st.rsplit(")", 1)[1].split()[1])
+        except (IndexError, ValueError):
+            ppid = 0
+        name, rss = "", 0
+        for line in status.splitlines():
+            if line.startswith("Name:"):
+                name = line.split(":", 1)[1].strip()
+            elif line.startswith("VmRSS:"):
+                try:
+                    rss = int(line.split()[1]) * 1024
+                except (ValueError, IndexError):
+                    pass
+        cmd = (read(f"/proc/{pid}/cmdline") or "").replace("\x00", " ").strip()
+        procs[pid] = {"pid": pid, "ppid": ppid, "name": name, "rss": rss, "cmd": cmd}
+
+    def under(pid, test):
+        seen = set()
+        while pid in procs and pid not in seen:
+            seen.add(pid)
+            if test(procs[pid]):
+                return True
+            pid = procs[pid]["ppid"]
+        return False
+
+    groups = {}
+    for p in procs.values():
+        if not p["cmd"] or not p["rss"] or p["pid"] == me:
+            continue  # kernel threads, zombies and Vanta itself
+        if KEEP.match(p["name"]) or KEEP.match(os.path.basename(p["cmd"].split(" ")[0])):
+            continue
+        if under(p["pid"], lambda q: q["name"] == "reaper" or "SteamLaunch" in q["cmd"] or q["pid"] == me):
+            continue
+        key = os.path.basename(p["cmd"].split(" ")[0]) or p["name"]
+        g = groups.setdefault(key, {"name": key, "pids": [], "rss": 0})
+        g["pids"].append(p["pid"])
+        g["rss"] += p["rss"]
+    return sorted([g for g in groups.values() if g["rss"] >= min_bytes], key=lambda g: -g["rss"])
+
+
+def close_app(pids):
+    """Ask an app to close (SIGTERM, like closing its window). Returns how many processes got the request."""
+    n = 0
+    for pid in pids:
+        try:
+            if SYS:  # tests: "closing" a fake process removes it from the fake /proc
+                shutil.rmtree(f"{SYS}/proc/{pid}")
+            else:
+                os.kill(pid, 15)
+            n += 1
+        except OSError:
+            pass
+    return n

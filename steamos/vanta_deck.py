@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Vanta Deck: a game hub for the Steam Deck on SteamOS.
 
-Home, your library with covers, a page for every game (Deck Verified, ProtonDB, reviews, news, notes, play stats),
-storage cleanup, live system stats and themes. Works with the touchscreen, the controller (D-pad, A, B, L1/R1) and
+Home, your library with covers and search, a page for every game (Deck Verified, ProtonDB, reviews, news, notes, ratings,
+battery life, Proton and launch options), your play calendar and badges, screenshots, storage cleanup, live system stats,
+a RAM page that closes background apps, and themes. Works with the touchscreen, the controller (D-pad, A, B, L1/R1) and
 a keyboard."""
 import math
 import os
@@ -19,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageTk
 import deck_core as dc
 
 APP = "Vanta Deck"
-VERSION = "1.0"
+VERSION = "1.1"
 
 THEMES = {
     "Vanta": dict(bg="#0a0e17", panel="#121a29", panel2="#1a2438", line="#26324a", text="#eef2fb", muted="#8d99b3",
@@ -38,8 +39,29 @@ THEMES = {
                  accent="#00e0a4", accent2="#4f8cff", good="#00e0a4", warn="#ffc23d", danger="#ff5a5a", fx=None),
     "Daylight": dict(bg="#eef1f6", panel="#ffffff", panel2="#f3f5f9", line="#d9dee8", text="#18202e", muted="#5d677a",
                      accent="#2563eb", accent2="#7c3aed", good="#15803d", warn="#a16207", danger="#dc2626", fx=None, light=True),
+    "Aurora": dict(bg="#051216", panel="#0b1d22", panel2="#11272e", line="#1d3a42", text="#e9fbf7", muted="#8fb8b0",
+                   accent="#2ee6a6", accent2="#38bdf8", good="#2ee6a6", warn="#facc15", danger="#fb7185", fx="orbs"),
+    "Snowfall": dict(bg="#0b1220", panel="#121c2e", panel2="#19253b", line="#28364f", text="#f2f7ff", muted="#9fb0cc",
+                     accent="#93c5fd", accent2="#e0f2fe", good="#86efac", warn="#fcd34d", danger="#fca5a5", fx="snow"),
+    "Ember": dict(bg="#140806", panel="#1e0d0a", panel2="#28130e", line="#402018", text="#fff1ea", muted="#c9a091",
+                  accent="#ff7a3d", accent2="#ffc145", good="#a3e635", warn="#ffc145", danger="#ff4d4d", fx="embers"),
+    "Synthwave": dict(bg="#120726", panel="#1b0c36", panel2="#241245", line="#3a1f66", text="#fdf0ff", muted="#b49cd6",
+                      accent="#ff3ea5", accent2="#22d3ee", good="#4ade80", warn="#fde047", danger="#fb7185", fx="stars"),
+    "Forest": dict(bg="#07110a", panel="#0e1b11", panel2="#142519", line="#213a27", text="#ecf8ee", muted="#94b39b",
+                   accent="#9be15d", accent2="#f6e05e", good="#9be15d", warn="#f6e05e", danger="#f87171", fx="fireflies"),
+    "Ocean": dict(bg="#04121f", panel="#0a1c2e", panel2="#10263c", line="#1b3a57", text="#e6f4ff", muted="#8bafc9",
+                  accent="#22a6f2", accent2="#2dd4bf", good="#2dd4bf", warn="#fbbf24", danger="#f87171", fx=None),
+    "Mocha": dict(bg="#17120f", panel="#211a16", panel2="#2b221d", line="#3d322b", text="#f5ece4", muted="#b5a395",
+                  accent="#d6a26b", accent2="#e8c9a0", good="#a3c47a", warn="#e8b04a", danger="#e06c5a", fx=None),
+    "Mono": dict(bg="#0d0d0f", panel="#161619", panel2="#1e1e22", line="#2c2c31", text="#f2f2f2", muted="#9a9aa2",
+                 accent="#f2f2f2", accent2="#9a9aa2", good="#d4d4d4", warn="#d4d4d4", danger="#ff6b6b", fx=None),
 }
-TABS = [("home", "Home"), ("library", "Library"), ("storage", "Storage"), ("system", "System"), ("settings", "Settings")]
+TABS = [("home", "Home"), ("library", "Library"), ("play", "Play"), ("shots", "Shots"), ("storage", "Storage"), ("system", "System"),
+        ("settings", "Settings")]
+BADGES = [("first", "First session", "Play a game with Vanta open"), ("marathon", "Marathon", "One session of 3 hours"),
+          ("owl", "Night owl", "Start a game after midnight"), ("streak7", "Week streak", "Play 7 days in a row"),
+          ("explorer", "Explorer", "Play 10 different games"), ("finisher", "Finisher", "Finish 3 games"),
+          ("critic", "Critic", "Rate 5 games"), ("century", "Centurion", "100 hours in Steam")]
 
 
 def mix(a, b, t):
@@ -94,6 +116,9 @@ class App:
         self.running = {}         # appid -> start time
         self.armed = {}
         self.entry = None
+        self.shots = None         # Steam screenshots, newest first
+        self.ram = None           # (memory info, apps) for the RAM page
+        self.search = ""
         self.fx = None
         self.fx_cost = 0.01
         self.drag = None
@@ -178,6 +203,7 @@ class App:
 
     def library_ready(self, games, steam):
         self.library, self.steam = games, steam
+        self.load_shots()
         self.redraw()
         if self.cfg["art_fetch"]:
             todo = [g for g in games if g["source"] == "Steam" and (not g["cover"] or not g["hero"])]
@@ -195,6 +221,20 @@ class App:
                             g["hero"] = p
                     time.sleep(0.05)
             self.background(work)
+
+    def load_shots(self):
+        udir = (self.steam or {}).get("udir")
+
+        def work():
+            try:
+                res = dc.screenshots(udir)
+            except Exception:
+                res = []
+            self.call(lambda: (setattr(self, "shots", res), self.redraw()))
+        self.background(work)
+
+    def game_by_appid(self, aid):
+        return next((g for g in self.library or [] if g["appid"] == str(aid)), None)
 
     def game(self, gid):
         return next((g for g in self.library or [] if g["id"] == gid), None)
@@ -258,6 +298,32 @@ class App:
                 except OSError:
                     pass
 
+    def sample_power(self):
+        """While a game runs on battery, remember how much power it draws: that gives its battery life."""
+        b = self.stats.get("batt") or {}
+        if not self.running or b.get("status") != "Discharging" or not b.get("watts") or b["watts"] < 1:
+            return
+        aid = next(iter(self.running))
+        pw = dict(self.cfg["power"])
+        tot, n = pw.get(aid, [0.0, 0])
+        if n > 36000:  # keep it following recent play
+            tot, n = tot / 2, n // 2
+        pw[aid] = [tot + b["watts"], n + 1]
+        self.cfg["power"] = pw
+
+    def played_since(self, since):
+        tot = sum(x["start"] + x["dur"] - max(x["start"], since) for x in self.cfg["sessions"] if x["start"] + x["dur"] > since)
+        tot += sum(time.time() - max(s, since) for s in self.running.values())
+        return tot
+
+    def week_start(self):
+        lt = time.localtime()
+        return time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday - lt.tm_wday, 0, 0, 0, 0, 0, -1))
+
+    def month_start(self):
+        lt = time.localtime()
+        return time.mktime((lt.tm_year, lt.tm_mon, 1, 0, 0, 0, 0, 0, -1))
+
     def played_today(self):
         lt = time.localtime()
         midnight = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
@@ -286,7 +352,8 @@ class App:
         self._ticks = n
         if n % 4 == 0 and self.library is not None:
             self.track()
-        if not self.page and self.tab in ("system", "home") or n % 15 == 0:
+        self.sample_power()
+        if not self.page and self.tab in ("system", "home", "play") or n % 15 == 0:
             self.redraw()
         if n % 60 == 0:
             try:
@@ -344,7 +411,10 @@ class App:
         if key in self.imgs:
             return self.imgs[key]
         try:
-            im = Image.open(path).convert("RGB")
+            im = Image.open(path)
+            if im.format == "JPEG":
+                im.draft("RGB", (int(w), int(h)))
+            im = im.convert("RGB")
             if cover:
                 sc = max(w / im.width, h / im.height)
                 im = im.resize((max(1, int(im.width * sc + 0.5)), max(1, int(im.height * sc + 0.5))), Image.LANCZOS)
@@ -430,10 +500,15 @@ class App:
         self.draw_backdrop(W, H)
         if self.page and self.page[0] == "game":
             self.draw_game_page(self.page[1])
+        elif self.page and self.page[0] == "shot":
+            self.draw_shot_view(self.page[1])
+        elif self.page and self.page[0] == "ram":
+            self.draw_ram()
         else:
             self.draw_topbar(W)
             y0 = 92 * k
-            {"home": self.draw_home, "library": self.draw_library, "storage": self.draw_storage, "system": self.draw_system,
+            {"home": self.draw_home, "library": self.draw_library, "play": self.draw_play, "shots": self.draw_shots,
+             "storage": self.draw_storage, "system": self.draw_system,
              "settings": self.draw_settings}[self.tab](40 * k, y0, W - 40 * k, H - 54 * k)
             self.draw_hints(W, H)
         if self.focus and not any(r["id"] == self.focus for r in self.regions):
@@ -478,11 +553,18 @@ class App:
         c = self.c
         self.rr(40 * k, 24 * k, 84 * k, 68 * k, 14 * k, T["accent"])
         self.text(62 * k, 46 * k, "V", self.font(24 * k, True), on_color(T["accent"]), anchor="center")
-        self.text(98 * k, 46 * k, "VANTA DECK", self.font(17 * k, True), T["text"], anchor="w")
-        x = 270 * k
         f = self.font(16 * k, True)
+        right_room = 230 * k
+        pad = 36 * k
+        need = sum(f.measure(lab) for _, lab in TABS) + len(TABS) * (pad + 8 * k)
+        if 270 * k + need + right_room <= W:
+            self.text(98 * k, 46 * k, "VANTA DECK", self.font(17 * k, True), T["text"], anchor="w")
+            x = 270 * k
+        else:  # big text or a small window: drop the name, then tighten the tabs
+            x = 100 * k
+            pad = max(14 * k, min(pad, (W - x - right_room - sum(f.measure(lab) for _, lab in TABS)) / len(TABS) - 8 * k))
         for tid, label in TABS:
-            w = f.measure(label) + 40 * k
+            w = f.measure(label) + pad
             on = self.tab == tid
             if on:
                 self.rr(x, 26 * k, x + w, 66 * k, 20 * k, T["accent"])
@@ -508,6 +590,8 @@ class App:
         hints = [("A", "Select"), ("B", "Back"), ("L1 R1", "Switch tab")]
         if self.tab in ("home", "library"):
             hints.insert(1, ("X", "Play"))
+        if self.tab == "library":
+            hints.insert(2, ("Y", "Favorite"))
         f, fb = self.font(13 * k), self.font(12 * k, True)
         x = W - 40 * k
         for key, lab in reversed(hints):
@@ -598,12 +682,12 @@ class App:
         ix = x + 18 * k
         iy = ry + 16 * k
         f, fb = self.font(13 * k), self.font(22 * k, True)
-        for lab, val in (("TODAY", dc.fmt_duration(self.played_today())), ("STREAK", f"{self.streak()} day{'s' if self.streak() != 1 else ''}"),
-                         ("UP NEXT", str(len(self.cfg["queue"])))):
+        for lab, val in (("TODAY", dc.fmt_duration(self.played_today())), ("THIS WEEK", dc.fmt_duration(self.played_since(self.week_start()))),
+                         ("STREAK", f"{self.streak()} day{'s' if self.streak() != 1 else ''}")):
             self.text(ix, iy, lab, self.font(12 * k, True), T["muted"])
             self.text(ix, iy + 18 * k, val, fb, T["text"])
             iy += (th - 32 * k) / 3
-        self.region("home_lib", x, ry, x1, ry + th, lambda: self.set_tab("library"))
+        self.region("home_lib", x, ry, x1, ry + th, lambda: self.set_tab("play"))
 
     def pick_home(self, gid):
         if self.cfg["home_sel"] == gid:
@@ -622,7 +706,7 @@ class App:
     # ------------------------------------------------------------------ Library
     FILTERS = [("all", "All"), ("steam", "Steam"), ("nonsteam", "Non-Steam"), ("fav", "★ Favorites"), ("queue", "Up next"),
                ("finished", "Finished")]
-    SORTS = [("recent", "Recent"), ("az", "A–Z"), ("played", "Most played"), ("size", "Size")]
+    SORTS = [("recent", "Recent"), ("az", "A–Z"), ("played", "Most played"), ("rating", "Your rating"), ("size", "Size")]
 
     def lib_games(self):
         f = self.cfg["lib_filter"]
@@ -638,9 +722,14 @@ class App:
             return sorted([g for g in lib if g["id"] in order], key=lambda g: order[g["id"]])
         elif f == "finished":
             lib = [g for g in lib if g["id"] in self.cfg["finished"]]
+        if self.search:
+            q = self.search.lower()
+            lib = [g for g in lib if q in g["name"].lower()]
         s = self.cfg["lib_sort"]
+        rt = self.cfg["ratings"]
         key = {"recent": lambda g: (-g["last"], g["name"].lower()), "az": lambda g: g["name"].lower(),
-               "played": lambda g: -g["minutes"], "size": lambda g: -g["size"]}[s]
+               "played": lambda g: -g["minutes"], "size": lambda g: -g["size"],
+               "rating": lambda g: (-rt.get(g["id"], 0), g["name"].lower())}.get(s, lambda g: g["name"].lower())
         lib.sort(key=key)
         return lib
 
@@ -658,6 +747,14 @@ class App:
             self.text(x + w / 2, y0 + 19 * k, lab, f, on_color(T["accent"]) if on else T["text"], anchor="center")
             self.region("lf_" + fid, x, y0, x + w, y0 + 38 * k, lambda v=fid: self.set_cfg("lib_filter", v, scroll="lib"))
             x += w + 8 * k
+        x += 10 * k
+        for rid, lab, fn, on in (("lib_search", f"“{self.search}”  ✕" if self.search else "Search", self.search_tap, bool(self.search)),
+                                 ("lib_dice", "Surprise me", self.surprise, False)):
+            w = f.measure(lab) + 30 * k
+            self.rr(x, y0, x + w, y0 + 38 * k, 19 * k, T["accent2"] if on else mix(T["panel2"], T["accent2"], 0.18))
+            self.text(x + w / 2, y0 + 19 * k, lab, f, on_color(T["accent2"]) if on else T["text"], anchor="center", maxw=w - 16 * k)
+            self.region(rid, x, y0, x + w, y0 + 38 * k, fn)
+            x += w + 8 * k
         sl = dict(self.SORTS)[self.cfg["lib_sort"]]
         lab = "Sort: " + sl + "  ›"
         w = f.measure(lab) + 30 * k
@@ -669,7 +766,8 @@ class App:
         games = self.lib_games()
         gy = y0 + 54 * k
         if not games:
-            self.text((x0 + x1) / 2, (gy + y1) / 2, "Nothing here yet", self.font(18 * k), T["muted"], anchor="center")
+            self.text((x0 + x1) / 2, (gy + y1) / 2, f"No games match “{self.search}”" if self.search else "Nothing here yet",
+                      self.font(18 * k), T["muted"], anchor="center")
             return
         cols = 6
         gap = 16 * k
@@ -689,6 +787,8 @@ class App:
                                                                    ("✓ FINISHED" if g["id"] in self.cfg["finished"] else None))
             self.cover(g, gx, ty, gx + tw, ty + th, "g_" + g["id"], lambda gid=g["id"]: self.open_game(gid), badge=badge)
             sub = dc.fmt_duration(g["minutes"] * 60) if g["minutes"] else ("Non-Steam" if g["source"] != "Steam" else "Not played")
+            if self.cfg["ratings"].get(g["id"]):
+                sub = "★" * self.cfg["ratings"][g["id"]] + "  " + sub
             self.text(gx + 2 * k, ty + th + 6 * k, sub, self.font(12.5 * k), T["muted"], maxw=tw)
         self.region("lib_scroll", x0, gy, x1, y1, None, scroll="lib")
 
@@ -710,7 +810,8 @@ class App:
         return off
 
     def wheel(self, d):
-        key = {"library": "lib", "storage": "storage", "settings": "settings"}.get(self.tab) if not self.page else "game"
+        key = ({"library": "lib", "storage": "storage", "settings": "settings", "play": "play", "shots": "shots"}.get(self.tab)
+               if not self.page else {"game": "game", "ram": "ram"}.get(self.page[0]))
         if key:
             self.scroll[key] = self.scroll.get(key, 0) + d * 120 * self.k
             self.redraw()
@@ -733,6 +834,8 @@ class App:
         self.redraw()
 
     def close_page(self):
+        if self.page and self.page[0] == "ram":
+            self.ram = None
         self.page = None
         self.hide_entry()
         self.focus = None
@@ -846,6 +949,25 @@ class App:
                                                                                  "worked… Shown on Home.", "muted")],
                       "buttons": [("EDIT NOTE" if note else "WRITE A NOTE", lambda: self.edit_note(g))] +
                                  ([("CLEAR", lambda: self.save_note(g, ""))] if note else [])})
+        r = self.cfg["ratings"].get(g["id"], 0)
+        cards.append({"title": "YOUR RATING", "lines": [("★" * r + "☆" * (5 - r) + f"   {r} of 5  ·  tap the same stars to clear", "warn")]
+                      if r else [("How good is it? The library can sort by your rating.", "muted")],
+                      "buttons": [("★" * n, lambda n_=n: self.rate(g, n_)) for n in range(1, 6)]})
+        pw = self.cfg["power"].get(g["appid"])
+        b = self.stats.get("batt") or {}
+        if pw and pw[1] >= 60:
+            avg = pw[0] / pw[1]
+            lines = [(f"Draws about {avg:.1f} W while you play on battery", "text")]
+            if b.get("full_wh"):
+                lines.append((f"A full charge lasts about {dc.fmt_duration(b['full_wh'] / avg * 3600)}", "good"))
+            if b.get("status") == "Discharging" and b.get("pct") and b.get("full_wh"):
+                lines.append((f"From {b['pct']}% now: about {dc.fmt_duration(b['full_wh'] * b['pct'] / 100 / avg * 3600)}", "muted"))
+            cards.append({"title": "BATTERY LIFE", "lines": lines, "buttons": []})
+        shots = [x for x in self.shots or [] if x["appid"] == g["appid"]]
+        if shots:
+            cards.append({"title": "SCREENSHOTS", "lines": [(f"{len(shots)} screenshot{'s' if len(shots) != 1 else ''}  ·  "
+                                                             f"latest {dc.ago(shots[0]['t'])}", "text")],
+                          "buttons": [("VIEW", lambda: self.show_game_shots(g))]})
         ss = [x for x in self.cfg["sessions"] if x["appid"] == g["appid"]]
         if ss:
             tot = sum(x["dur"] for x in ss)
@@ -859,7 +981,11 @@ class App:
                           "lines": [(n["title"], "text"), (time.strftime("%b %d", time.localtime(n["date"])) + "  ·  " + n["text"][:170], "muted")],
                           "buttons": [("READ", lambda: dc.open_url(n["url"]))] if n["url"] else []})
         if g["source"] == "Steam":
-            cards.append({"title": "MANAGE", "lines": [(f"Installed in {g['lib']}", "muted")],
+            tool = (f"Runs with {g['tool']} (set for this game)" if g.get("tool") else
+                    f"Runs with Steam's default{': ' + g['tool_default'] if g.get('tool_default') else ''}")
+            cards.append({"title": "MANAGE", "lines": [(tool, "text"),
+                                                       (f"Launch options: {g['opts']}" if g.get("opts") else "No launch options", "muted"),
+                                                       (f"Installed in {g['lib']}", "muted")],
                           "buttons": [("PROPERTIES", lambda: dc.launch(f"steam://gameproperties/{g['appid']}")),
                                       ("UNINSTALL" if not self.is_armed("un_" + g["id"]) else "TAP AGAIN",
                                        lambda: self.confirm("un_" + g["id"], lambda: dc.launch(f"steam://uninstall/{g['appid']}"),
@@ -888,6 +1014,57 @@ class App:
             w = bf.measure(lab) + 34 * k
             self.button(f"cb_{card['title']}_{i}", x, y1 - 54 * k, x + w, y1 - 16 * k, lab, fn, "normal", 13.5)
             x += w + 10 * k
+
+    def rate(self, g, n):
+        rt = dict(self.cfg["ratings"])
+        if rt.get(g["id"]) == n:
+            rt.pop(g["id"])
+            self.show_toast("Rating cleared")
+        else:
+            rt[g["id"]] = n
+            self.show_toast(f"{g['name']}: {'★' * n}")
+        self.cfg["ratings"] = rt
+
+    def search_tap(self):
+        if self.search:
+            self.search = ""
+            self.scroll["lib"] = 0
+            self.redraw()
+        else:
+            self.ask_text("", self.set_search, "Type part of a name (Steam + X opens the keyboard), then Enter")
+
+    def set_search(self, text):
+        self.search = (text or "").strip()[:40]
+        self.scroll["lib"] = 0
+        self.hide_entry()
+        self.redraw()
+
+    def surprise(self):
+        lib = [g for g in self.library or [] if g["appid"] not in self.running]
+        if not lib:
+            return
+        fin = self.cfg["finished"]
+        pool = [g for g in lib if g["id"] in self.cfg["queue"] or (g["minutes"] < 120 and g["id"] not in fin)] or lib
+        g = random.choice(pool)
+        self.open_game(g["id"])
+        self.show_toast(f"How about {g['name']}?")
+
+    def ask_text(self, value, on_save, hint):
+        self.hide_entry()
+        k, T = self.k, self.t
+        var = tk.StringVar(value=value)
+        e = tk.Entry(self.root, textvariable=var, font=self.font(18 * k), bg=T["panel2"], fg=T["text"], insertbackground=T["text"],
+                     relief="flat", highlightthickness=2, highlightcolor=T["accent"])
+        e.place(x=60 * k, y=self.H - 140 * k, width=self.W - 260 * k, height=56 * k)
+        ok = tk.Button(self.root, text="OK", font=self.font(15 * k, True), bg=T["accent"], fg=on_color(T["accent"]), relief="flat",
+                       command=lambda: on_save(var.get()))
+        ok.place(x=self.W - 190 * k, y=self.H - 140 * k, width=130 * k, height=56 * k)
+        e.bind("<Return>", lambda ev: on_save(var.get()))
+        e.bind("<Escape>", lambda ev: self.hide_entry())
+        e.focus_set()
+        self.entry = e
+        self.entry_btn = ok
+        self.show_toast(hint)
 
     # ------------------------------------------------------------------ notes (a real text box: the Steam keyboard works with it)
     def edit_note(self, g):
@@ -924,6 +1101,399 @@ class App:
         self.cfg["notes"] = notes
         self.hide_entry()
         self.show_toast("Note saved" if text else "Note cleared")
+
+    # ------------------------------------------------------------------ Play: calendar, totals, top games, badges
+    def day_minutes(self):
+        days = {}
+        for x in self.cfg["sessions"]:
+            t, end = x["start"], x["start"] + x["dur"]
+            while t < end:  # split sessions that cross midnight
+                lt = time.localtime(t)
+                nxt = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + 1, 0, 0, 0, 0, 0, -1))
+                key = time.strftime("%Y-%m-%d", lt)
+                days[key] = days.get(key, 0) + (min(end, nxt) - t) / 60
+                t = nxt
+        for aid, st in self.running.items():
+            key = time.strftime("%Y-%m-%d")
+            days[key] = days.get(key, 0) + (time.time() - max(st, time.mktime(time.localtime()[:3] + (0, 0, 0, 0, 0, -1)))) / 60
+        return days
+
+    def best_streak(self):
+        import datetime as dt
+        days = sorted({time.strftime("%Y-%m-%d", time.localtime(x["start"])) for x in self.cfg["sessions"]})
+        best = run = 0
+        prev = None
+        for d in days:
+            cur = dt.date.fromisoformat(d)
+            run = run + 1 if prev and (cur - prev).days == 1 else 1
+            best = max(best, run)
+            prev = cur
+        return max(best, self.streak())
+
+    def badges(self):
+        ss = self.cfg["sessions"]
+        steam_hours = sum(g["minutes"] for g in self.library or []) / 60
+        prog = {"first": (len(ss), 1), "marathon": (max([x["dur"] for x in ss] or [0]) / 3600, 3),
+                "owl": (sum(1 for x in ss if time.localtime(x["start"]).tm_hour < 5), 1),
+                "streak7": (self.best_streak(), 7), "explorer": (len({x["appid"] for x in ss}), 10),
+                "finisher": (len(self.cfg["finished"]), 3), "critic": (len(self.cfg["ratings"]), 5),
+                "century": (steam_hours, 100)}
+        return [(bid, name, desc, min(prog[bid][0], prog[bid][1]), prog[bid][1]) for bid, name, desc in BADGES]
+
+    def top_games(self, since):
+        tot = {}
+        for x in self.cfg["sessions"]:
+            if x["start"] + x["dur"] > since:
+                tot[x["appid"]] = tot.get(x["appid"], 0) + x["start"] + x["dur"] - max(x["start"], since)
+        for aid, st in self.running.items():
+            tot[aid] = tot.get(aid, 0) + time.time() - max(st, since)
+        names = {x["appid"]: x["name"] for x in self.cfg["sessions"]}
+        out = []
+        for aid, sec in sorted(tot.items(), key=lambda kv: -kv[1]):
+            g = self.game_by_appid(aid)
+            out.append((g["name"] if g else names.get(aid, f"App {aid}"), sec, g))
+        return out
+
+    def draw_play(self, x0, y0, x1, y1):
+        T, k = self.t, self.k
+        off = self.scroll.get("play", 0)
+        top = y0
+        y0 = y0 - off
+        ss = self.cfg["sessions"]
+
+        def vis(a, b):
+            return a >= top - 2 and b <= y1 + 2
+        lw = (x1 - x0) * 0.58
+        rx = x0 + lw + 20 * k
+        # totals
+        tiles = [("THIS WEEK", dc.fmt_duration(self.played_since(self.week_start()))),
+                 ("THIS MONTH", dc.fmt_duration(self.played_since(self.month_start()))),
+                 ("SESSIONS", str(len(ss))),
+                 ("LONGEST", dc.fmt_duration(max([x["dur"] for x in ss] or [0])))]
+        tw = (lw - 3 * 14 * k) / 4
+        for i, (lab, val) in enumerate(tiles if vis(y0, y0 + 92 * k) else []):
+            tx = x0 + i * (tw + 14 * k)
+            self.rr(tx, y0, tx + tw, y0 + 92 * k, 18 * k, mix(T["panel"], T["bg"], 0.1))
+            self.text(tx + 18 * k, y0 + 16 * k, lab, self.font(12 * k, True), T["muted"])
+            self.text(tx + 18 * k, y0 + 40 * k, val, self.font(26 * k, True), T["text"], maxw=tw - 30 * k)
+        # calendar
+        cy = y0 + 110 * k
+        weeks = 20
+        ch = 32 * k
+        cell = min((lw - 40 * k - 40 * k) / weeks, ch) - 5 * k
+        hh = 46 * k + 7 * (cell + 5 * k) + 44 * k
+        cal = vis(cy, cy + hh)
+        self.rr(x0, cy, x0 + lw, cy + hh, 18 * k, mix(T["panel"], T["bg"], 0.1)) if cal else None
+        self.text(x0 + 20 * k, cy + 18 * k, f"YOUR LAST {weeks} WEEKS", self.font(12.5 * k, True), T["muted"])
+        days = self.day_minutes() if cal else {}
+        import datetime as dt
+        today = dt.date.today()
+        start = today - dt.timedelta(days=today.weekday() + 7 * (weeks - 1))
+        gx0 = x0 + 52 * k
+        gy0 = cy + 46 * k
+        f = self.font(11 * k)
+        for r_, lab in ((0, "Mon"), (2, "Wed"), (4, "Fri"), (6, "Sun")) if cal else ():
+            self.text(x0 + 18 * k, gy0 + r_ * (cell + 5 * k) + cell / 2, lab, f, T["muted"], anchor="w")
+        last_month = None
+        for w in range(weeks if cal else 0):
+            for d in range(7):
+                day = start + dt.timedelta(days=w * 7 + d)
+                if day > today:
+                    continue
+                m = days.get(day.isoformat(), 0)
+                lvl = 0 if m < 1 else 1 if m < 30 else 2 if m < 90 else 3 if m < 180 else 4
+                col = mix(T["panel2"], T["accent"], (0, 0.3, 0.55, 0.8, 1)[lvl])
+                cx_ = gx0 + w * (cell + 5 * k)
+                cy_ = gy0 + d * (cell + 5 * k)
+                self.rr(cx_, cy_, cx_ + cell, cy_ + cell, 4 * k, col)
+            mday = start + dt.timedelta(days=w * 7)
+            if mday.month != last_month:
+                last_month = mday.month
+                self.text(gx0 + w * (cell + 5 * k), gy0 + 7 * (cell + 5 * k) + 4 * k, mday.strftime("%b"), f, T["muted"])
+        lx = x0 + lw - 20 * k
+        for lvl in range(4, -1, -1) if cal else ():
+            self.rr(lx - cell * 0.6, cy + 16 * k, lx, cy + 16 * k + cell * 0.6, 3 * k,
+                    mix(T["panel2"], T["accent"], (0, 0.3, 0.55, 0.8, 1)[lvl]))
+            lx -= cell * 0.6 + 4 * k
+        if cal:
+            self.text(lx - 4 * k, cy + 16 * k + cell * 0.3, "less → more", f, T["muted"], anchor="e")
+        # monthly wrap
+        wy = cy + hh + 16 * k
+        ms = self.month_start()
+        mt = [x for x in ss if x["start"] >= ms]
+        tg = self.top_games(ms)
+        wd = {}
+        hrs = {}
+        for x in mt:
+            lt = time.localtime(x["start"])
+            wd[lt.tm_wday] = wd.get(lt.tm_wday, 0) + x["dur"]
+            hrs[lt.tm_hour // 3] = hrs.get(lt.tm_hour // 3, 0) + x["dur"]
+        lines = []
+        if mt:
+            nd = len({time.strftime("%d", time.localtime(x["start"])) for x in mt})
+            lines.append((f"{dc.fmt_duration(sum(x['dur'] for x in mt))} over {nd} day{'s' if nd != 1 else ''}, "
+                          f"{len({x['appid'] for x in mt})} game{'s' if len({x['appid'] for x in mt}) != 1 else ''}", "text"))
+            if tg:
+                lines.append((f"Most played: {tg[0][0]} ({dc.fmt_duration(tg[0][1])})", "text"))
+            days_n = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"]
+            slot = ["at night", "early mornings", "in the morning", "around midday", "in the afternoon", "early evenings",
+                    "in the evening", "late evenings"]
+            lines.append((f"You play most on {days_n[max(wd, key=wd.get)]}, {slot[max(hrs, key=hrs.get)]}", "muted"))
+        else:
+            lines.append(("Nothing tracked this month yet. Vanta counts your sessions while it stays open in the background.", "muted"))
+        card = {"title": time.strftime("%B").upper() + " SO FAR", "lines": lines, "buttons": []}
+        h = self.card_height(card, lw)
+        if vis(wy, wy + h):
+            self.draw_card(card, x0, wy, x0 + lw, wy + h)
+        left_end = wy + h
+        # top games (right)
+        ry = y0
+        rng = self.cfg["play_range"]
+        since = {"week": self.week_start(), "month": self.month_start(), "all": 0}.get(rng, self.month_start())
+        games = self.top_games(since)[:5]
+        th_ = 112 * k + 5 * 44 * k
+        if vis(ry, ry + 80 * k):
+            self.rr(rx, ry, x1, min(y1, ry + th_), 18 * k, mix(T["panel"], T["bg"], 0.1))
+            self.text(rx + 20 * k, ry + 18 * k, "MOST PLAYED", self.font(12.5 * k, True), T["muted"])
+        cx = rx + 20 * k
+        fb = self.font(13 * k, True)
+        for rid, lab in (("week", "Week"), ("month", "Month"), ("all", "All time")) if vis(ry, ry + 80 * k) else ():
+            w = fb.measure(lab) + 26 * k
+            on = rng == rid
+            self.rr(cx, ry + 46 * k, cx + w, ry + 80 * k, 17 * k, T["accent"] if on else T["panel2"])
+            self.text(cx + w / 2, ry + 63 * k, lab, fb, on_color(T["accent"]) if on else T["text"], anchor="center")
+            self.region("pr_" + rid, cx, ry + 46 * k, cx + w, ry + 80 * k, lambda v=rid: self.set_cfg("play_range", v))
+            cx += w + 8 * k
+        by = ry + 96 * k
+        if not games and vis(by, by + 20 * k):
+            self.text(rx + 20 * k, by, "No sessions in this range yet", self.font(14 * k), T["muted"])
+        top_s = games[0][1] if games else 1
+        for name, sec, g in games:
+            bw = (x1 - rx - 40 * k)
+            if vis(by, by + 34 * k):
+                self.rr(rx + 20 * k, by, x1 - 20 * k, by + 34 * k, 10 * k, T["panel2"])
+                self.rr(rx + 20 * k, by, rx + 20 * k + max(20 * k, bw * sec / top_s), by + 34 * k, 10 * k, mix(T["panel2"], T["accent"], 0.5))
+                self.text(rx + 32 * k, by + 17 * k, name, self.font(14 * k, True), T["text"], anchor="w", maxw=bw * 0.66)
+                self.text(x1 - 32 * k, by + 17 * k, dc.fmt_duration(sec), self.font(13.5 * k), T["text"], anchor="e")
+                if g:
+                    self.region("pt_" + g["id"], rx + 20 * k, by, x1 - 20 * k, by + 34 * k, lambda gid=g["id"]: self.open_game(gid))
+            by += 44 * k
+        # badges
+        bdy = ry + th_ + 16 * k
+        bl = self.badges()
+        got = sum(1 for b in bl if b[3] >= b[4])
+        bh = 54 * k
+        if vis(bdy, bdy + 46 * k):
+            self.rr(rx, bdy, x1, min(y1, bdy + 46 * k + 4 * (bh + 8 * k) + 6 * k), 18 * k, mix(T["panel"], T["bg"], 0.1))
+            self.text(rx + 20 * k, bdy + 16 * k, f"BADGES  ·  {got} OF {len(bl)}", self.font(12.5 * k, True), T["muted"])
+        bw2 = (x1 - rx - 50 * k) / 2
+        for i, (bid, name, desc, have, need) in enumerate(bl):
+            r_, cn = divmod(i, 2)
+            bx = rx + 20 * k + cn * (bw2 + 10 * k)
+            by2 = bdy + 42 * k + r_ * (bh + 8 * k)
+            if not vis(by2, by2 + bh):
+                continue
+            done = have >= need
+            self.rr(bx, by2, bx + bw2, by2 + bh, 14 * k, mix(T["panel2"], T["accent"], 0.35) if done else T["panel2"])
+            self.text(bx + 14 * k, by2 + 9 * k, ("✓ " if done else "") + name, self.font(14 * k, True),
+                      T["text"] if done else T["muted"], maxw=bw2 - 24 * k)
+            sub = desc if done or need == 1 else f"{desc}  ·  {int(have)}/{need}"
+            self.text(bx + 14 * k, by2 + 31 * k, sub, self.font(11.5 * k), T["muted"] if not done else T["text"], maxw=bw2 - 24 * k)
+        right_end = bdy + 46 * k + 4 * (bh + 8 * k) + 6 * k
+        self.clamp_scroll("play", max(left_end, right_end) + off - top - (y1 - top))
+        self.region("play_scroll", x0, top, x1, y1, None, scroll="play")
+
+    # ------------------------------------------------------------------ Screenshots
+    def shot_list(self):
+        sel = self.cfg["shots_game"]
+        return [x for x in self.shots or [] if not sel or x["appid"] == sel]
+
+    def show_game_shots(self, g):
+        self.cfg["shots_game"] = g["appid"]
+        self.page = None
+        self.set_tab("shots")
+
+    def draw_shots(self, x0, y0, x1, y1):
+        T, k = self.t, self.k
+        if self.shots is None:
+            self.text((x0 + x1) / 2, (y0 + y1) / 2, "Looking for screenshots…", self.font(20 * k), T["muted"], anchor="center")
+            return
+        if not self.shots:
+            self.text((x0 + x1) / 2, (y0 + y1) / 2 - 18 * k, "No screenshots yet", self.font(24 * k, True), T["text"], anchor="center")
+            self.text((x0 + x1) / 2, (y0 + y1) / 2 + 18 * k, "Press STEAM + R1 in a game to take one. They show up here.",
+                      self.font(16 * k), T["muted"], anchor="center")
+            return
+        counts = {}
+        for x in self.shots:
+            counts[x["appid"]] = counts.get(x["appid"], 0) + 1
+        chips = [(None, f"All  ·  {len(self.shots)}")]
+        for aid, n in sorted(counts.items(), key=lambda kv: -kv[1])[:6]:
+            g = self.game_by_appid(aid)
+            chips.append((aid, f"{g['name'] if g else 'App ' + aid}  ·  {n}"))
+        sel = self.cfg["shots_game"]
+        if sel and sel not in [c[0] for c in chips]:
+            g = self.game_by_appid(sel)
+            chips.append((sel, f"{g['name'] if g else 'App ' + sel}  ·  {counts.get(sel, 0)}"))
+        x = x0
+        f = self.font(14 * k, True)
+        for aid, lab in chips:
+            w = min(f.measure(lab) + 30 * k, 260 * k)
+            if x + w > x1:
+                break
+            on = sel == aid
+            self.rr(x, y0, x + w, y0 + 38 * k, 19 * k, T["accent"] if on else T["panel2"])
+            self.text(x + w / 2, y0 + 19 * k, lab, f, on_color(T["accent"]) if on else T["text"], anchor="center", maxw=w - 20 * k)
+            self.region(f"sf_{aid}", x, y0, x + w, y0 + 38 * k, lambda v=aid: self.set_cfg("shots_game", v, scroll="shots"))
+            x += w + 8 * k
+        items = self.shot_list()
+        gy = y0 + 54 * k
+        cols, gap = 4, 16 * k
+        tw = (x1 - x0 - gap * (cols - 1)) / cols
+        th = tw * 9 / 16
+        rowh = th + 34 * k + gap
+        off = self.clamp_scroll("shots", math.ceil(len(items) / cols) * rowh - (y1 - gy))
+        for i, it in enumerate(items):
+            r_, cn = divmod(i, cols)
+            tx, ty = x0 + cn * (tw + gap), gy + r_ * rowh - off
+            if ty < gy - 2 or ty > y1:
+                continue
+            img = self.image(it["thumb"], tw, th, 12 * k)
+            if img:
+                self.c.create_image(tx, ty, image=img, anchor="nw")
+            else:
+                self.rr(tx, ty, tx + tw, ty + th, 12 * k, T["panel2"])
+            g = self.game_by_appid(it["appid"])
+            lab = time.strftime("%b %d, %H:%M", time.localtime(it["t"]))
+            if not sel:
+                lab = (g["name"] if g else "App " + it["appid"]) + "  ·  " + lab
+            self.text(tx + 2 * k, ty + th + 8 * k, lab, self.font(12.5 * k), T["muted"], maxw=tw)
+            self.region(f"sh_{i}", tx, ty, tx + tw, ty + th, lambda i_=i: self.open_shot(i_))
+        self.region("shots_scroll", x0, gy, x1, y1, None, scroll="shots")
+
+    def open_shot(self, i):
+        self.page = ("shot", i)
+        self.redraw()
+
+    def step_shot(self, d):
+        items = self.shot_list()
+        if items and self.page and self.page[0] == "shot":
+            self.page = ("shot", (self.page[1] + d) % len(items))
+            self.redraw()
+
+    def draw_shot_view(self, i):
+        T, k, c = self.t, self.k, self.c
+        W, H = self.W, self.H
+        items = self.shot_list()
+        if not items:
+            self.page = None
+            return self.redraw()
+        i = min(i, len(items) - 1)
+        it = items[i]
+        c.create_rectangle(0, 0, W, H, fill="#000000", outline="")
+        key = ("full", it["path"], W, H)
+        if key not in self.imgs:
+            try:
+                im = Image.open(it["path"])
+                im.draft("RGB", (W, H))
+                im = im.convert("RGB")
+                sc = min(W / im.width, H / im.height)
+                im = im.resize((max(1, int(im.width * sc)), max(1, int(im.height * sc))), Image.LANCZOS)
+                self.imgs[key] = ImageTk.PhotoImage(im)
+            except Exception:
+                self.imgs[key] = None
+        if self.imgs[key]:
+            c.create_image(W / 2, H / 2, image=self.imgs[key])
+        g = self.game_by_appid(it["appid"])
+        self.rr(24 * k, 20 * k, W - 24 * k, 72 * k, 26 * k, mix("#000000", T["panel"], 0.6))
+        self.button("sv_back", 30 * k, 26 * k, 140 * k, 66 * k, "‹  BACK", self.close_page, "ghost")
+        self.text(160 * k, 46 * k, f"{g['name'] if g else 'App ' + it['appid']}  ·  {time.strftime('%b %d %Y, %H:%M', time.localtime(it['t']))}"
+                  f"  ·  {i + 1} of {len(items)}", self.font(15 * k, True), "#ffffff", anchor="w", maxw=W - 480 * k)
+        self.button("sv_prev", W - 300 * k, 26 * k, W - 170 * k, 66 * k, "‹  PREV", lambda: self.step_shot(-1), "ghost")
+        self.button("sv_next", W - 160 * k, 26 * k, W - 30 * k, 66 * k, "NEXT  ›", lambda: self.step_shot(1), "ghost")
+
+    # ------------------------------------------------------------------ RAM: what is using memory, close what you don't need
+    def open_ram(self):
+        self.page = ("ram",)
+        self.focus = None
+        self.scan_ram()
+        self.redraw()
+
+    def scan_ram(self):
+        def work():
+            try:
+                res = (dc.memory_info(), dc.memory_apps())
+            except Exception:
+                res = (None, [])
+            self.call(lambda: (setattr(self, "ram", res), self.redraw()))
+        self.background(work)
+
+    def close_ram_app(self, app):
+        n = dc.close_app(app["pids"])
+        self.show_toast(f"Asked {app['name']} to close: about {dc.fmt_bytes(app['rss'])} back" if n else f"Couldn't close {app['name']}")
+        self.root.after(1500, self.scan_ram)
+
+    def close_all_ram(self, apps):
+        n = sum(1 for a in apps if dc.close_app(a["pids"]))
+        self.show_toast(f"Asked {n} app{'s' if n != 1 else ''} to close: about {dc.fmt_bytes(sum(a['rss'] for a in apps))} back")
+        self.root.after(1500, self.scan_ram)
+
+    def draw_ram(self):
+        T, k = self.t, self.k
+        W, H = self.W, self.H
+        x0, x1 = 48 * k, W - 48 * k
+        self.button("ram_back", 32 * k, 26 * k, 140 * k, 68 * k, "‹  BACK", self.close_page, "ghost")
+        self.text(160 * k, 47 * k, "MEMORY", self.font(22 * k, True), T["text"], anchor="w")
+        self.button("ram_rescan", x1 - 170 * k, 28 * k, x1, 66 * k, "CHECK AGAIN", self.scan_ram, "normal", 13)
+        if self.ram is None:
+            self.text(W / 2, H / 2, "Looking at memory…", self.font(20 * k), T["muted"], anchor="center")
+            return
+        info, apps = self.ram
+        y = 96 * k
+        if info:
+            used = info["total"] - info["avail"]
+            self.rr(x0, y, x1, y + 120 * k, 20 * k, mix(T["panel"], T["bg"], 0.1))
+            self.text(x0 + 22 * k, y + 18 * k, f"{dc.fmt_bytes(used)} in use of {dc.fmt_bytes(info['total'])}", self.font(24 * k, True), T["text"])
+            frac = used / info["total"]
+            self.rr(x0 + 22 * k, y + 60 * k, x1 - 22 * k, y + 76 * k, 8 * k, T["panel2"])
+            self.rr(x0 + 22 * k, y + 60 * k, x0 + 22 * k + (x1 - x0 - 44 * k) * frac, y + 76 * k, 8 * k,
+                    T["danger"] if frac > 0.9 else T["warn"] if frac > 0.75 else T["accent"])
+            sub = f"{dc.fmt_bytes(info['avail'])} free for games"
+            if info["swap_total"]:
+                sub += f"  ·  swap {dc.fmt_bytes(info['swap_used'])} of {dc.fmt_bytes(info['swap_total'])}"
+            sub += f"  ·  {dc.fmt_bytes(info['cached'])} is cache Linux hands back by itself when a game needs it"
+            self.text(x0 + 22 * k, y + 90 * k, sub, self.font(13.5 * k), T["muted"], maxw=x1 - x0 - 44 * k)
+            y += 140 * k
+        tot = sum(a["rss"] for a in apps)
+        self.text(x0, y, f"BACKGROUND APPS  ·  {dc.fmt_bytes(tot)}" if apps else "BACKGROUND APPS", self.font(13 * k, True), T["muted"])
+        if len(apps) > 1:
+            armed = self.is_armed("ram_all")
+            self.button("ram_all", x1 - 220 * k, y - 10 * k, x1, y + 28 * k, "TAP AGAIN" if armed else "CLOSE ALL",
+                        lambda: self.confirm("ram_all", lambda: self.close_all_ram(apps), "Tap again to close every app listed"),
+                        "danger" if armed else "normal", 13)
+        y += 34 * k
+        if not apps:
+            self.text(x0, y, "Nothing to close: no apps of yours are running in the background.", self.font(15 * k), T["good"])
+            y += 30 * k
+        off = self.scroll.get("ram", 0)
+        top = y
+        y -= off
+        for i, a in enumerate(apps[:30]):
+            if y >= top - 2 and y < H - 60 * k:
+                self.rr(x0, y, x1, y + 56 * k, 14 * k, mix(T["panel"], T["bg"], 0.1))
+                self.text(x0 + 18 * k, y + 28 * k, a["name"], self.font(15 * k, True), T["text"], anchor="w", maxw=(x1 - x0) * 0.45)
+                self.text(x0 + (x1 - x0) * 0.5, y + 28 * k,
+                          f"{dc.fmt_bytes(a['rss'])}  ·  {len(a['pids'])} process{'es' if len(a['pids']) != 1 else ''}",
+                          self.font(14 * k), T["muted"], anchor="w")
+                key = "ram_" + a["name"]
+                armed = self.is_armed(key)
+                self.button(f"ramc_{i}", x1 - 150 * k, y + 9 * k, x1 - 12 * k, y + 47 * k, "TAP AGAIN" if armed else "CLOSE",
+                            lambda a_=a, k_=key: self.confirm(k_, lambda: self.close_ram_app(a_), f"Tap again to close {a_['name']}"),
+                            "danger" if armed else "normal", 13)
+            y += 64 * k
+        self.clamp_scroll("ram", y + off - top - (H - 60 * k - top))
+        self.region("ram_scroll", x0, top, x1, H, None, scroll="ram")
+        self.text(x0, H - 30 * k, "Steam, Game Mode, system services and your running game are never listed. Closing an app is like "
+                  "closing its window: save your work in it first.", self.font(12.5 * k), T["muted"], maxw=x1 - x0)
 
     # ------------------------------------------------------------------ Storage
     def draw_storage(self, x0, y0, x1, y1):
@@ -1063,6 +1633,9 @@ class App:
             r_, cn = divmod(i, cols)
             tx, ty = x0 + cn * (tw + gap), y0 + r_ * (th + gap)
             self.rr(tx, ty, tx + tw, ty + th, 20 * k, mix(T["panel"], T["bg"], 0.1))
+            if lab == "MEMORY":
+                self.button("sys_ram", tx + 22 * k, ty + th - 66 * k, tx + tw - 22 * k, ty + th - 22 * k, "FREE UP RAM", self.open_ram,
+                            "accent", 15)
             self.text(tx + 22 * k, ty + 20 * k, lab, self.font(13 * k, True), T["muted"])
             self.text(tx + 22 * k, ty + 44 * k, big, self.font(40 * k, True), T["text"])
             self.text(tx + 22 * k, ty + 100 * k, sub, self.font(14.5 * k), T["muted"], maxw=tw - 44 * k)
@@ -1161,7 +1734,7 @@ class App:
             return
         if not self.fx or self.fx["key"] != (kind, W, H, self.cfg["theme"]):
             rnd = random.Random(7)
-            n = {"stars": 46, "petals": 26, "orbs": 5, "glow": 0}[kind]
+            n = {"stars": 46, "petals": 26, "orbs": 5, "glow": 0, "snow": 60, "embers": 34, "fireflies": 22}.get(kind, 0)
             self.fx = {"key": (kind, W, H, self.cfg["theme"]), "kind": kind, "t": time.time(),
                        "p": [dict(x=rnd.random() * W, y=rnd.random() * H, r=rnd.random(), ph=rnd.random() * 6.3,
                                   v=0.4 + rnd.random()) for _ in range(n)]}
@@ -1174,6 +1747,17 @@ class App:
             elif kind == "petals":
                 r = (5 + p["r"] * 6) * k
                 iid = self.c.create_oval(p["x"] - r, p["y"] - r * 0.6, p["x"] + r, p["y"] + r * 0.6, fill=mix(T["bg"], T["accent"], 0.5), outline="")
+            elif kind == "snow":
+                r = (1.2 + p["r"] * 2.6) * k
+                iid = self.c.create_oval(p["x"] - r, p["y"] - r, p["x"] + r, p["y"] + r, fill=mix(T["bg"], "#ffffff", 0.35 + p["r"] * 0.4),
+                                         outline="")
+            elif kind == "embers":
+                r = (1.2 + p["r"] * 2.2) * k
+                iid = self.c.create_oval(p["x"] - r, p["y"] - r, p["x"] + r, p["y"] + r,
+                                         fill=mix(T["bg"], T["accent"] if p["r"] > 0.4 else T["accent2"], 0.55 + p["r"] * 0.4), outline="")
+            elif kind == "fireflies":
+                spr = self.orb(int((14 + p["r"] * 12) * k), T["accent"] if p["r"] > 0.3 else T["accent2"], strong=True)
+                iid = self.c.create_image(p["x"], p["y"], image=spr) if spr else None
             else:
                 spr = self.orb(int((140 + p["r"] * 120) * k), T["accent"] if p["r"] > 0.5 else T["accent2"])
                 iid = self.c.create_image(p["x"], p["y"], image=spr) if spr else None
@@ -1182,12 +1766,12 @@ class App:
                 self.fx["ids"].append((iid, p))
         self.c.tag_lower("backdrop")
 
-    def orb(self, R, col):
-        key = ("orb", R, col)
+    def orb(self, R, col, strong=False):
+        key = ("orb", R, col, strong)
         if key not in self.imgs:
-            n = R * 2
+            n = max(2, R * 2)
             m = Image.new("L", (n, n), 0)
-            ImageDraw.Draw(m).ellipse((n * 0.2, n * 0.2, n * 0.8, n * 0.8), fill=90)
+            ImageDraw.Draw(m).ellipse((n * 0.2, n * 0.2, n * 0.8, n * 0.8), fill=230 if strong else 90)
             m = m.filter(ImageFilter.GaussianBlur(n * 0.12))
             im = Image.new("RGBA", (n, n), tuple(int(col[i:i + 2], 16) for i in (1, 3, 5)) + (0,))
             im.putalpha(m)
@@ -1222,6 +1806,24 @@ class App:
                     if p["x"] > W + 20:
                         p["x"] -= W + 40
                         dx -= W + 40
+                elif fx["kind"] in ("snow", "embers"):
+                    up = fx["kind"] == "embers"
+                    dy = (-1 if up else 1) * p["v"] * (26 if up else 22) * k * dt
+                    dx = math.sin(now * (1.1 if up else 0.5) + p["ph"]) * (12 if up else 9) * k * dt
+                    p["x"] += dx
+                    p["y"] += dy
+                    if not up and p["y"] > H + 10:
+                        p["y"] -= H + 20
+                        dy -= H + 20
+                    elif up and p["y"] < -10:
+                        p["y"] += H + 20
+                        dy += H + 20
+                elif fx["kind"] == "fireflies":
+                    a = now * 0.35 * p["v"] + p["ph"]
+                    nx = p.setdefault("cx", p["x"]) + math.sin(a) * 70 * k + math.sin(a * 2.3) * 20 * k
+                    ny = p.setdefault("cy", p["y"]) + math.cos(a * 0.9) * 50 * k
+                    dx, dy = nx - p["x"], ny - p["y"]
+                    p["x"], p["y"] = nx, ny
                 else:
                     a = now * 0.12 * p["v"] + p["ph"]
                     nx = p.setdefault("cx", p["x"]) + math.sin(a) * W * 0.12
@@ -1278,7 +1880,7 @@ class App:
             return
         ks = e.keysym
         m = {"Up": "up", "Down": "down", "Left": "left", "Right": "right", "Return": "a", "KP_Enter": "a", "space": "a",
-             "Escape": "b", "BackSpace": "b", "q": "lb", "e": "rb", "Prior": "lb", "Next": "rb", "x": "x", "F11": "full"}
+             "Escape": "b", "BackSpace": "b", "q": "lb", "e": "rb", "Prior": "lb", "Next": "rb", "x": "x", "y": "y", "F11": "full"}
         b = m.get(ks)
         if b == "full":
             self.root.attributes("-fullscreen", not self.root.attributes("-fullscreen"))
@@ -1287,14 +1889,18 @@ class App:
 
     def default_focus(self):
         if self.page:
-            return "gp_play"
+            return {"game": "gp_play", "shot": "sv_next", "ram": "ram_rescan"}.get(self.page[0])
         return {"home": "home_play", "library": next((r["id"] for r in self.regions if r["id"].startswith("g_")), None),
-                "storage": "scan", "system": None, "settings": "th_" + self.cfg["theme"]}.get(self.tab)
+                "play": "pr_" + self.cfg["play_range"], "shots": next((r["id"] for r in self.regions if r["id"].startswith("sh_")), None),
+                "storage": "scan", "system": "sys_ram", "settings": "th_" + self.cfg["theme"]}.get(self.tab)
 
     def on_pad(self, b):
         if self.entry:
             if b == "b":
                 self.hide_entry()
+            return
+        if self.page and self.page[0] == "shot" and b in ("left", "right", "lb", "rb"):
+            self.step_shot(-1 if b in ("left", "lb") else 1)
             return
         if not self.focus_visible:
             self.focus_visible = True
@@ -1318,12 +1924,13 @@ class App:
             if r and r["tap"]:
                 r["tap"]()
         elif b == "x":
-            g = self.game(self.page[1]) if self.page else (self.game(self.focus[2:]) if self.focus and self.focus.startswith("g_")
+            g = (self.game(self.page[1]) if self.page[0] == "game" else None) if self.page else (self.game(self.focus[2:]) if self.focus and self.focus.startswith("g_")
                                                           else self.home_game() if self.tab == "home" else None)
             if g:
                 self.play(g)
         elif b == "y" and self.focus and self.focus.startswith(("g_", "home_g_")):
-            self.toggle("favorites", self.focus.split("g_", 1)[1])
+            gid = self.focus[len("home_g_"):] if self.focus.startswith("home_g_") else self.focus[2:]
+            self.toggle("favorites", gid)
         elif b in ("up", "down", "left", "right"):
             self.move_focus(b)
 
@@ -1351,7 +1958,8 @@ class App:
 
     def reveal(self, r):
         """Scroll so the focused item is on screen."""
-        key = "game" if self.page else {"library": "lib", "storage": "storage", "settings": "settings"}.get(self.tab)
+        key = ({"game": "game", "ram": "ram"}.get(self.page[0]) if self.page else
+               {"library": "lib", "storage": "storage", "settings": "settings", "play": "play", "shots": "shots"}.get(self.tab))
         if not key:
             return
         top, bottom = 150 * self.k, self.H - 70 * self.k

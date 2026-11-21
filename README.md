@@ -30,13 +30,19 @@ build.bat           :: Vanta.exe and VantaGo.exe (run as administrator)
 build-preview.bat   :: Preview builds that never change the PC
 ```
 
-## Vanta Deck for SteamOS (1.0)
+## Vanta Deck for SteamOS (1.1)
 
 ![Vanta Deck](docs/steamos.png)
 
-Home, your Steam and non-Steam library with Steam's own covers, game pages with Deck Verified and ProtonDB ratings, reviews and news, storage cleanup (shader caches and Proton folders left by uninstalled games, moved to the Trash), and live battery, CPU, GPU, temperature and fan stats.
+- **Library:** your Steam and non-Steam games with Steam's own covers, search, "Surprise me" and your ratings.
+- **Game pages:** Deck Verified and ProtonDB ratings, reviews, news, notes, battery life for that game, its Proton version and launch options, screenshots.
+- **Play:** a 20-week play calendar, totals, most played, a monthly wrap and badges.
+- **Shots:** all your Steam screenshots, by game.
+- **Storage:** cleanup of shader caches and Proton folders left by uninstalled games (moved to the Trash).
+- **System:** live battery, CPU, GPU, temperature and fan stats, plus **Free up RAM**, which closes background apps you pick. Steam, Game Mode and your running game are never listed.
+- **16 themes**, 9 of them animated.
 
-It only reads Steam's files. It doesn't change system settings, and it moves folders to the Trash only when you tap twice.
+It only reads Steam's files. It doesn't change system settings, it moves folders to the Trash only when you tap twice, and it closes an app only when you tap Close twice.
 
 ### Run from source
 
