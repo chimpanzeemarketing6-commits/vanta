@@ -30,7 +30,7 @@ build.bat           :: Vanta.exe and VantaGo.exe (run as administrator)
 build-preview.bat   :: Preview builds that never change the PC
 ```
 
-## Vanta Deck for SteamOS (1.2)
+## Vanta Deck for SteamOS (1.3)
 
 ![Vanta Deck](docs/steamos.png)
 
@@ -45,6 +45,7 @@ build-preview.bat   :: Preview builds that never change the PC
   - **Phone app:** stats, your games, Game Boost and screenshots in your phone's browser, behind a PIN.
   - Startup apps, controller test, backup & restore, guest mode, TV mode.
 - **67 themes** (all of the Windows ones), 26 animated, with day & night switching.
+- **Updates itself** from this repo's releases (Settings › Updates), with a checksum check and one-tap rollback.
 
 ![Tools](docs/steamos-tools.png)
 
@@ -76,3 +77,16 @@ Then copy `dist/VantaDeck` and `install.sh` to the Deck and run `install.sh` in 
 - Controller firmware commands only come from verified sources (the Linux kernel driver and Handheld Daemon). Unknown commands are never sent.
 - The Preview builds block everything that would change the PC.
 - Backups and settings sync never include keys, tokens or webhooks.
+
+## Publishing a Vanta Deck update
+
+Vanta Deck looks at this repo's releases for the newest tag ending in `-deck` (drafts and pre-releases are skipped) that has a
+`Vanta-Deck-<version>-SteamOS.zip` attached, with the `VantaDeck` program inside.
+
+1. Bump `VERSION` in `steamos/vanta_deck.py` and build the single file (see above).
+2. Zip the `VantaDeck-<version>` folder (VantaDeck, install.sh, README.txt, vanta-deck.png) as `Vanta-Deck-<version>-SteamOS.zip`.
+3. Create a release with the tag `v<version>-deck`, attach the zip, and add a line `sha256: <checksum of the zip>` to the notes
+   (`sha256sum Vanta-Deck-<version>-SteamOS.zip`). Vanta Deck refuses a download that doesn't match it.
+4. Untick "Set as the latest release" so the Windows app's updater keeps finding Windows releases.
+
+Every Deck checks at most every 6 hours, or right away with Settings › Updates › Check now.

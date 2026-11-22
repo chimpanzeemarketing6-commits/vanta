@@ -26,7 +26,7 @@ HOME = os.path.expanduser("~")
 DATA = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "vanta-deck")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "vanta-deck")
 SYS = os.environ.get("VANTA_SYS_ROOT", "")  # tests point this at a fake /sys and /proc
-UA = "VantaDeck/1.2 (+SteamOS)"
+UA = "VantaDeck/1.3 (+SteamOS)"
 
 TOOL_NAMES = re.compile(r"^(proton|steam linux runtime|steamworks common|steamvr|steam audio|"
                         r"directx|vc\+\+|easy anti-cheat|battleye)", re.I)
@@ -119,7 +119,8 @@ DEFAULTS = {"theme": "Vanta", "animations": True, "start_tab": "home", "fahrenhe
             "play_range": "month", "shots_game": None,
             "boost_auto": False, "boost_apps": {}, "boost_guard": 0, "boost_stats": {"freed": 0, "times": 0}, "paused": [],
             "batt_goal": None, "day_night": False, "day_theme": "Daylight", "day_hours": [7, 19],
-            "remote": False, "remote_pin": "", "guest": False, "tv_auto": True, "fx_kind_filter": "all", "stores": True}
+            "remote": False, "remote_pin": "", "guest": False, "tv_auto": True, "fx_kind_filter": "all", "stores": True,
+            "update_auto": True, "update_last": 0, "update_skip": ""}
 
 
 class Config(dict):
@@ -1070,3 +1071,96 @@ def lan_ip():
         return None
     finally:
         s.close()
+
+
+# =====================================================================  updates from GitHub Releases
+UPDATE_REPO = "chimpanzeemarketing6-commits/vanta"
+UPDATE_API = os.environ.get("VANTA_UPDATE_API", "https://api.github.com")  # tests point this at a local server
+ASSET = re.compile(r"^Vanta-Deck-[\d.]+-SteamOS\.zip$", re.I)
+
+
+def version_tuple(text):
+    return tuple(int(x) for x in re.findall(r"\d+", text or "")[:3]) or (0,)
+
+
+def check_update(current, repo=UPDATE_REPO):
+    """The newest Vanta Deck release on GitHub: {version, tag, url, size, sha256, notes, newer} or None.
+    The repo also holds Windows releases, so only tags ending in -deck with a Vanta-Deck-…-SteamOS.zip count."""
+    rels = get_json(f"{UPDATE_API}/repos/{repo}/releases?per_page=30", timeout=20)
+    if not isinstance(rels, list):
+        return None
+    best = None
+    for rel in rels:
+        tag = str(rel.get("tag_name") or "")
+        if rel.get("draft") or rel.get("prerelease") or not tag.lower().endswith("-deck"):
+            continue
+        asset = next((a for a in rel.get("assets") or [] if ASSET.match(str(a.get("name") or ""))), None)
+        if not asset:
+            continue
+        ver = version_tuple(tag)
+        if best and ver <= best["vt"]:
+            continue
+        body = rel.get("body") or ""
+        m = re.search(r"sha256[:\s]+([0-9a-f]{64})", body, re.I)
+        digest = str(asset.get("digest") or "")
+        sha = digest.split(":", 1)[1] if digest.lower().startswith("sha256:") else (m.group(1).lower() if m else None)
+        best = {"vt": ver, "version": ".".join(map(str, ver)), "tag": tag, "url": asset.get("browser_download_url"),
+                "size": int(asset.get("size") or 0), "sha256": sha, "notes": body[:1500], "name": rel.get("name") or tag}
+    if best:
+        best["newer"] = best["vt"] > version_tuple(current)
+    return best
+
+
+def install_update(info, exe, progress=None):
+    """Download the release zip, check it, and put the new VantaDeck in place of exe (the running file stays usable
+    until Vanta restarts). Returns the path of the new program. Raises OSError with a plain message on any problem."""
+    import hashlib
+    import zipfile
+    folder = os.path.join(CACHE, "update")
+    os.makedirs(folder, exist_ok=True)
+    zpath = os.path.join(folder, "update.zip")
+    req = urllib.request.Request(info["url"], headers={"User-Agent": UA})
+    h = hashlib.sha256()
+    got = 0
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r, open(zpath, "wb") as f:
+            total = int(r.headers.get("Content-Length") or info.get("size") or 0)
+            while True:
+                chunk = r.read(1 << 16)
+                if not chunk:
+                    break
+                f.write(chunk)
+                h.update(chunk)
+                got += len(chunk)
+                if progress and total:
+                    progress(got / total)
+    except Exception as e:
+        raise OSError(f"the download didn't finish ({e.__class__.__name__})")
+    if info.get("size") and got != info["size"]:
+        raise OSError("the download is the wrong size")
+    if info.get("sha256") and h.hexdigest() != info["sha256"]:
+        raise OSError("the download doesn't match the release's checksum")
+    try:
+        with zipfile.ZipFile(zpath) as z:
+            member = next((n for n in z.namelist() if n.rstrip("/").split("/")[-1] == "VantaDeck"), None)
+            if not member:
+                raise OSError("the zip has no VantaDeck program in it")
+            data = z.read(member)
+    except zipfile.BadZipFile:
+        raise OSError("the download isn't a valid zip")
+    if not data.startswith(b"\x7fELF") or len(data) < 1_000_000:
+        raise OSError("the program in the zip isn't a Linux app")
+    new = exe + ".new"
+    with open(new, "wb") as f:
+        f.write(data)
+    os.chmod(new, 0o755)
+    try:
+        shutil.copy2(exe, exe + ".old")  # one step back, in case the new version misbehaves
+    except OSError:
+        pass
+    os.replace(new, exe)
+    try:
+        os.remove(zpath)
+    except OSError:
+        pass
+    return exe

@@ -21,7 +21,7 @@ import deck_core as dc
 import deck_remote
 
 APP = "Vanta Deck"
-VERSION = "1.2"
+VERSION = "1.3"
 
 THEMES = {
     "Vanta": dict(bg="#0a0e17", panel="#121a29", panel2="#1a2438", line="#26324a", text="#eef2fb", muted="#8d99b3",
@@ -202,6 +202,8 @@ class App:
         self.startup = None
         self.backups = None
         self.theme_slot = "main"
+        self.update = None        # newest release on GitHub (see deck_core.check_update)
+        self.update_state = None  # None, "checking", "downloading", (0..1 progress), "error: …", "latest"
         self.theme_filter = "all"
         self.fx = None
         self.fx_cost = 0.01
@@ -220,6 +222,8 @@ class App:
         self.wake_paused(quiet=True)  # apps left frozen if Vanta was closed mid-game
         if self.cfg["remote"]:
             self.root.after(500, lambda: self.set_remote(True, quiet=True))
+        if self.cfg["update_auto"] and time.time() - self.cfg["update_last"] > 6 * 3600:
+            self.root.after(6000, lambda: self.check_update(quiet=True))
         threading.Thread(target=self.load_library, daemon=True).start()
         self.root.after(50, self.pump)
         self.root.after(200, self.tick)
@@ -626,7 +630,7 @@ class App:
             self.draw_shot_view(self.page[1])
         elif self.page and self.page[0] == "ram":
             self.draw_ram()
-        elif self.page and self.page[0] in ("goal", "remote", "startup", "pad", "backup", "themes"):
+        elif self.page and self.page[0] in ("goal", "remote", "startup", "pad", "backup", "themes", "update"):
             getattr(self, "draw_" + self.page[0])()
         else:
             self.draw_topbar(W)
@@ -755,7 +759,8 @@ class App:
                 self.text(40 * k, H - 26 * k, f"● Playing {g['name']}  ·  {dc.fmt_duration(time.time() - s)}", self.font(14 * k, True),
                           T["good"], anchor="w")
         extra = [lab for on, lab in ((self.cfg["guest"], "GUEST MODE"), (bool(self.cfg["paused"]), f"{len(self.cfg['paused'])} APP{'S' if len(self.cfg['paused']) != 1 else ''} FROZEN"),
-                                     (bool(self.cfg["batt_goal"]), "GOAL " + time.strftime("%H:%M", time.localtime(self.cfg["batt_goal"] or 0))))
+                                     (bool(self.cfg["batt_goal"]), "GOAL " + time.strftime("%H:%M", time.localtime(self.cfg["batt_goal"] or 0))),
+                                     (bool(self.update and self.update["newer"]), "UPDATE READY"))
                  if on]
         if extra:
             ex = 40 * k + (self.font(14 * k, True).measure("● Playing " + (g["name"] if self.running and g else "")) + 140 * k
@@ -2190,6 +2195,168 @@ class App:
             self.region("th_" + name, tx, ty, tx + tw, ty + th, lambda n=name: self.set_theme(n), scroll="themes")
         self.region("themes_scroll", x0, gy, x1, self.H, None, scroll="themes")
 
+    # ------------------------------------------------------------------ updates
+    @staticmethod
+    def exe_path():
+        return sys.executable if getattr(sys, "frozen", False) else None
+
+    def check_update(self, quiet=False):
+        if self.update_state in ("checking", "downloading") or isinstance(self.update_state, float):
+            return
+        self.update_state = "checking"
+        if not quiet:
+            self.redraw()
+
+        def work():
+            try:
+                info = dc.check_update(VERSION)
+                err = None
+            except Exception as e:
+                info, err = None, e.__class__.__name__
+            self.call(lambda: self.update_checked(info, err, quiet))
+        self.background(work)
+
+    def update_checked(self, info, err, quiet):
+        self.cfg["update_last"] = time.time()
+        if err:
+            self.update_state = f"error: couldn't reach GitHub ({err})"
+        else:
+            self.update = info
+            self.update_state = None if info and info["newer"] else "latest"
+            if info and info["newer"] and (not quiet or info["tag"] != self.cfg["update_skip"]):
+                self.show_toast(f"Vanta Deck {info['version']} is out: Settings › Updates")
+            elif not quiet:
+                self.show_toast("You have the newest Vanta Deck")
+        if quiet and self.update_state and self.update_state.startswith("error"):
+            self.update_state = None
+        self.redraw()
+
+    def install_update(self):
+        exe = self.exe_path()
+        info = self.update
+        if not exe or not info or not info.get("url"):
+            return
+        if not os.access(os.path.dirname(exe), os.W_OK):
+            self.show_toast("Vanta can't write to its own folder: reinstall it with install.sh")
+            return
+        self.update_state = 0.0
+        self.redraw()
+
+        def prog(f):
+            self.call(lambda: (setattr(self, "update_state", f), self.redraw()))
+
+        def work():
+            try:
+                dc.install_update(info, exe, prog)
+                self.call(lambda: self.update_done(None))
+            except OSError as e:
+                msg = str(e)
+                self.call(lambda: self.update_done(msg))
+        self.background(work)
+
+    def update_done(self, err):
+        if err:
+            self.update_state = f"error: {err}"
+            self.redraw()
+            return
+        self.update_state = "restarting"
+        self.redraw()
+        self.root.after(800, self.restart)
+
+    def restart(self):
+        """Start the (new) program in this same process, so Steam keeps treating it as the same app."""
+        exe = self.exe_path()
+        self.wake_paused(quiet=True)
+        if self.remote:
+            self.remote.stop()
+        try:
+            self.cfg.save()
+        except OSError:
+            pass
+        self.joy.stop = True
+        if not exe:
+            return
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+        os.execv(exe, [exe])
+
+    def roll_back(self):
+        exe = self.exe_path()
+        if not exe or not os.path.exists(exe + ".old"):
+            return
+        try:
+            os.replace(exe + ".old", exe)
+        except OSError as e:
+            self.show_toast(f"Couldn't go back: {e.strerror}")
+            return
+        self.show_toast("Going back to the previous version…")
+        self.root.after(800, self.restart)
+
+    def draw_update(self):
+        T, k = self.t, self.k
+        x0, x1 = 48 * k, self.W - 48 * k
+        self.page_header("UPDATES", f"You have Vanta Deck {VERSION}. New versions come from GitHub: {dc.UPDATE_REPO}")
+        y = 120 * k
+        st = self.update_state
+        info = self.update
+        exe = self.exe_path()
+        self.button("up_check", x0, y, x0 + 240 * k, y + 50 * k, "CHECKING…" if st == "checking" else "CHECK NOW",
+                    self.check_update, "normal", 14)
+        on = self.cfg["update_auto"]
+        self.text(x0 + 270 * k, y + 25 * k, "Check by itself", self.font(15 * k, True), T["text"], anchor="w")
+        self.button("up_auto", x0 + 420 * k, y + 7 * k, x0 + 510 * k, y + 43 * k, "ON" if on else "OFF",
+                    lambda: self.set_cfg("update_auto", not self.cfg["update_auto"]), "accent" if on else "normal", 13)
+        if self.cfg["update_last"]:
+            self.text(x1, y + 25 * k, f"Last checked {dc.ago(self.cfg['update_last'])}", self.font(13.5 * k), T["muted"], anchor="e")
+        y += 74 * k
+        if isinstance(st, str) and st.startswith("error"):
+            self.text(x0, y, st[7:].capitalize(), self.font(16 * k, True), T["danger"], maxw=x1 - x0)
+            y += 40 * k
+        if info:
+            box_h = 250 * k
+            self.rr(x0, y, x1, y + box_h, 20 * k, mix(T["panel"], T["accent"], 0.1) if info["newer"] else mix(T["panel"], T["bg"], 0.1))
+            head = f"Vanta Deck {info['version']} is ready" if info["newer"] else f"You have the newest version ({VERSION})"
+            self.text(x0 + 24 * k, y + 20 * k, head, self.font(26 * k, True), T["text"])
+            meta = info["name"] + (f"  ·  {dc.fmt_bytes(info['size'])}" if info.get("size") else "") + \
+                ("  ·  checksum verified on download" if info.get("sha256") else "")
+            self.text(x0 + 24 * k, y + 60 * k, meta, self.font(14 * k), T["muted"])
+            notes = [l.strip(" #*-") for l in info["notes"].splitlines() if l.strip() and not l.lower().startswith("sha256")]
+            ny = y + 92 * k
+            for line in notes[:5]:
+                for part in self.wrap(line, self.font(14.5 * k), x1 - x0 - 48 * k)[:2]:
+                    if ny > y + box_h - 30 * k:
+                        break
+                    self.text(x0 + 24 * k, ny, part, self.font(14.5 * k), T["text"])
+                    ny += 22 * k
+            y += box_h + 20 * k
+            if info["newer"]:
+                if not exe:
+                    self.text(x0, y, "You're running Vanta Deck from source: update it with git pull instead.", self.font(16 * k), T["muted"])
+                elif isinstance(st, float):
+                    self.rr(x0, y, x1, y + 50 * k, 14 * k, T["panel2"])
+                    self.rr(x0, y, x0 + (x1 - x0) * max(0.02, st), y + 50 * k, 14 * k, T["accent"])
+                    self.text((x0 + x1) / 2, y + 25 * k, f"Downloading… {st * 100:.0f}%", self.font(16 * k, True), T["text"], anchor="center")
+                elif st == "restarting":
+                    self.text(x0, y + 10 * k, "Installed. Restarting…", self.font(18 * k, True), T["good"])
+                else:
+                    self.button("up_install", x0, y, x0 + 320 * k, y + 54 * k, "INSTALL AND RESTART", self.install_update, "accent", 15)
+                    if info["tag"] != self.cfg["update_skip"]:
+                        self.button("up_skip", x0 + 340 * k, y, x0 + 560 * k, y + 54 * k, "SKIP THIS ONE",
+                                    lambda: (self.set_cfg("update_skip", info["tag"]), self.show_toast("Won't remind you about this one")),
+                                    "normal", 14)
+                y += 80 * k
+        elif st != "checking":
+            self.text(x0, y, "Tap Check now to look for a new version.", self.font(16 * k), T["muted"])
+            y += 40 * k
+        if exe and os.path.exists(exe + ".old"):
+            armed = self.is_armed("rollback")
+            self.button("up_back", x0, self.H - 80 * k, x0 + 340 * k, self.H - 36 * k, "TAP AGAIN" if armed else "GO BACK TO THE LAST VERSION",
+                        lambda: self.confirm("rollback", self.roll_back, "Tap again to go back to the version before the update"),
+                        "danger" if armed else "normal", 13)
+        self.text(x1, self.H - 58 * k, "Your notes, ratings and settings stay as they are.", self.font(12.5 * k), T["muted"], anchor="e")
+
     # ------------------------------------------------------------------ Storage
     def draw_storage(self, x0, y0, x1, y1):
         T, k = self.t, self.k
@@ -2388,6 +2555,11 @@ class App:
         y = self.setting_row(x0, y, x1, "Size of everything", "Bigger is easier to read on the TV", f"{self.cfg['ui_scale']}%",
                              lambda: self.set_cfg("ui_scale", sizes[(sizes.index(self.cfg["ui_scale"]) + 1) % len(sizes)]
                                                   if self.cfg["ui_scale"] in sizes else 100), True)
+        up = self.update
+        y = self.setting_row(x0, y, x1, "Updates", (f"Vanta Deck {up['version']} is ready to install" if up and up["newer"] else
+                                                    f"You have {VERSION}" + (f"  ·  checked {dc.ago(self.cfg['update_last'])}"
+                                                                             if self.cfg["update_last"] else "")),
+                             "UPDATE  ›" if up and up["newer"] else "CHECK  ›", lambda: self.open_page("update"), bool(up and up["newer"]))
         exe = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
         y = self.setting_row(x0, y, x1, "Add Vanta Deck to Steam", "So it opens in Game Mode like a game (Desktop Mode)", "ADD",
                              lambda: self.show_toast("Added: find it under Non-Steam in Game Mode" if dc.add_to_steam(exe)
@@ -2643,7 +2815,8 @@ class App:
     def default_focus(self):
         if self.page:
             return {"game": "gp_play", "shot": "sv_next", "ram": "ram_auto", "goal": "goal_0", "remote": "rm_toggle",
-                    "startup": "su_0", "pad": "pg_back", "backup": "bk_make", "themes": "th_" + self.cfg["theme"]}.get(self.page[0])
+                    "startup": "su_0", "pad": "pg_back", "backup": "bk_make", "themes": "th_" + self.cfg["theme"],
+                    "update": "up_install" if self.update and self.update["newer"] else "up_check"}.get(self.page[0])
         return {"home": "home_play", "library": next((r["id"] for r in self.regions if r["id"].startswith("g_")), None),
                 "play": "pr_" + self.cfg["play_range"], "shots": next((r["id"] for r in self.regions if r["id"].startswith("sh_")), None),
                 "storage": "scan", "system": "sys_ram", "tools": "tool_boost", "settings": "set_Theme"}.get(self.tab)
@@ -2740,6 +2913,9 @@ def main():
             pg = os.environ["VANTA_PAGE"]
             if pg == "ram":
                 app.open_ram()
+            elif pg == "update":
+                app.open_page("update")
+                app.check_update()
             else:
                 if pg == "startup":
                     app.load_startup()
