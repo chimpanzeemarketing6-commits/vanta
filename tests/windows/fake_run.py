@@ -1037,4 +1037,17 @@ if os.environ.get("ANIMPERF"):
     ui.root.after(int(os.environ.get("APWAIT", "9000")), _ap)
 if os.environ.get("AMBDBG"):
     ui.root.after(20000, lambda: (print("AMB", [(k_, v) for k_, v in ui.covers.items() if str(k_[0]).startswith("amb")], "pending", [k_ for k_ in ui.cover_pending if str(k_[0]).startswith("amb")], "sel", ui.selected_game() and {a: ui.selected_game().get(a) for a in ("id", "hero", "cover")}, flush=True), ui.root.destroy()))
+if os.environ.get("MOUSEESC"):
+    def _me():
+        ui.cfg["pad_combo"] = False
+        ui.toggle_padmouse("desktop", quiet=True)
+        on0 = ui.padmouse.on
+        seq = [["back", "start"]]
+        ui.pad.poll = lambda: seq.pop(0) if seq else []
+        ui.pad.prev = 0x30
+        def done():
+            print("MOUSEESC before", on0, "after", ui.padmouse.on, "hub page", ui.page, "tab", ui.tab, flush=True)
+            ui.root.destroy()
+        ui.root.after(1600, done)
+    ui.root.after(6000, _me)
 ui.root.mainloop()

@@ -5847,6 +5847,8 @@ class DesktopControls:
                 pressed.add("lt")
             if g.bRightTrigger > 100:
                 pressed.add("rt")
+            if {"back", "start"} <= pressed:  # View + Menu together is Vanta's way out of mouse mode: don't type with it
+                pressed -= {"back", "start"}
             for n in pressed - self.held:
                 if n in m:
                     self._act(m[n], True)

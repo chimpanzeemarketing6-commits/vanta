@@ -10,7 +10,7 @@ A game hub for handheld gaming PCs. One app for your library, performance, batte
 
 ![Vanta on Windows](docs/windows-home.png)
 
-## Vanta for Windows (9.9.2)
+## Vanta for Windows (9.9.3)
 
 - **Library from every store:** Steam, Epic, GOG, Xbox, EA, Ubisoft, Battle.net, Amazon, emulators, with covers.
 - **Performance:** TDP, Auto TDP, per-game profiles, a battery goal, Game Boost, focus mode.

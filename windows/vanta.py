@@ -31,7 +31,7 @@ import tkinter.font as tkfont
 EDITION = "go" if os.environ.get("VANTA_EDITION") == "go" else "universal"
 IS_GO = EDITION == "go"
 APP_NAME = "Vanta Go" if IS_GO else "Vanta"
-VERSION = "9.9.2"
+VERSION = "9.9.3"
 # Preview build (Vanta-Preview.exe): no admin prompt, its own settings, and by default it changes nothing on the PC.
 PREVIEW = os.environ.get("VANTA_PREVIEW") == "1"
 FROZEN = getattr(sys, "frozen", False)
@@ -7415,7 +7415,8 @@ class UI:
                 names = [n for m, n in ((1, "up"), (2, "down"), (4, "left"), (8, "right")) if self.pad.stuck & m]
                 self.add_log("PAD", "Ignoring " + " and ".join(names) + ": held for 8 seconds without a break "
                              "(stick drift or a stuck button). It works again once released.")
-            both = (self.pad.prev & 0x30) == 0x30 and self.cfg["pad_combo"]
+            mouse_on = bool(self.padmouse and self.padmouse.on)
+            both = (self.pad.prev & 0x30) == 0x30 and (self.cfg["pad_combo"] or mouse_on)
             now = time.time()
             if both and self.combo_t is None and ("back" in buttons or "start" in buttons):
                 self.combo_t = now
@@ -7424,9 +7425,11 @@ class UI:
             elif self.combo_t is not None:
                 if both and now - self.combo_t >= 0.7:
                     self.combo_t = -1.0  # used: wait for release
+                    if self.padmouse and self.padmouse.on:
+                        self.toggle_padmouse()  # the way out of mouse mode: always works, even with the shortcuts off
                     self.open_hub()
                 elif not both:
-                    if self.combo_t > 0:
+                    if self.combo_t > 0 and self.cfg["pad_combo"]:
                         self.toggle_overlay()
                     self.combo_t = None
             elif self.padmouse and self.padmouse.on:
