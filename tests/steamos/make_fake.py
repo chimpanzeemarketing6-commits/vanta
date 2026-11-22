@@ -107,3 +107,40 @@ json.dump({"sessions": sess, "ratings": {"steam:1245620": 5, "steam:504230": 4, 
            "power": {"1145360": [14.2 * 600, 600], "1245620": [21.5 * 900, 900]}}, open("/tmp/deck_seed.json", "w"))
 open(f"{S}/proc/uptime", "w").write("15234.2 50000.1")
 print("fake ready")
+
+# ---- 1.2: Heroic (Epic + GOG), Lutris, Desktop Mode autostart, an HDMI screen
+home = H
+HR = f"{home}/.var/app/com.heroicgameslauncher.hgl/config/heroic"
+os.makedirs(f"{HR}/legendaryConfig/legendary", exist_ok=True)
+os.makedirs(f"{HR}/gog_store", exist_ok=True)
+os.makedirs(f"{HR}/store_cache", exist_ok=True)
+json.dump({"Fortnite": {"app_name": "Fortnite", "title": "Fortnite", "install_path": f"{home}/Games/Heroic/Fortnite",
+                        "install_size": 32 * 2**30, "is_dlc": False},
+           "Celeste": {"app_name": "Celeste", "title": "Celeste", "install_path": f"{home}/Games/Heroic/Celeste",
+                       "install_size": 1_200_000_000, "is_dlc": False},
+           "SomeDLC": {"app_name": "SomeDLC", "title": "A DLC", "install_path": "", "install_size": 1, "is_dlc": True}},
+          open(f"{HR}/legendaryConfig/legendary/installed.json", "w"))
+json.dump({"installed": [{"appName": "1207658924", "platform": "windows", "install_path": f"{home}/Games/Heroic/The Witcher",
+                          "install_size": "3.5 GiB"}]}, open(f"{HR}/gog_store/installed.json", "w"))
+json.dump({"games": [{"app_name": "1207658924", "title": "The Witcher: Enhanced Edition"}]}, open(f"{HR}/store_cache/gog_library.json", "w"))
+import sqlite3
+L = f"{home}/.local/share/lutris"
+os.makedirs(f"{L}/coverart", exist_ok=True)
+if os.path.exists(f"{L}/pga.db"):
+    os.remove(f"{L}/pga.db")
+con = sqlite3.connect(f"{L}/pga.db")
+con.execute("create table games (id integer primary key, name text, slug text, runner text, directory text, lastplayed integer, "
+            "playtime real, installed integer)")
+con.execute("insert into games values (1, 'Diablo II', 'diablo-ii', 'wine', '/home/deck/Games/diablo-ii', ?, 12.5, 1)", (int(time.time()) - 86400 * 3,))
+con.execute("insert into games values (2, 'Uninstalled Thing', 'thing', 'wine', '', 0, 0, 0)")
+con.commit(); con.close()
+art(f"{L}/coverart/diablo-ii.jpg", 264, 352, "Diablo II", 0.02)
+A = f"{home}/.config/autostart"
+os.makedirs(A, exist_ok=True)
+for n, nm in (("discord", "Discord"), ("org.kde.kdeconnect.daemon", "KDE Connect"), ("steam", "Steam")):
+    open(f"{A}/{n}.desktop", "w").write(f"[Desktop Entry]\nName={nm}\nExec={n}\nType=Application\n")
+d = f"{S}/sys/class/drm/card0-HDMI-A-1"
+os.makedirs(d, exist_ok=True)
+open(f"{d}/status", "w").write("disconnected\n")
+os.makedirs(f"{S}/sys/class/drm/card0-eDP-1", exist_ok=True)
+open(f"{S}/sys/class/drm/card0-eDP-1/status", "w").write("connected\n")

@@ -26,7 +26,7 @@ HOME = os.path.expanduser("~")
 DATA = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "vanta-deck")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "vanta-deck")
 SYS = os.environ.get("VANTA_SYS_ROOT", "")  # tests point this at a fake /sys and /proc
-UA = "VantaDeck/1.1 (+SteamOS)"
+UA = "VantaDeck/1.2 (+SteamOS)"
 
 TOOL_NAMES = re.compile(r"^(proton|steam linux runtime|steamworks common|steamvr|steam audio|"
                         r"directx|vc\+\+|easy anti-cheat|battleye)", re.I)
@@ -116,7 +116,10 @@ def ago(t):
 DEFAULTS = {"theme": "Vanta", "animations": True, "start_tab": "home", "fahrenheit": False, "art_fetch": True,
             "sessions": [], "notes": {}, "queue": [], "finished": {}, "favorites": [], "home_sel": None,
             "lib_filter": "all", "lib_sort": "recent", "welcomed": False, "ui_scale": 100, "ratings": {}, "power": {},
-            "play_range": "month", "shots_game": None}
+            "play_range": "month", "shots_game": None,
+            "boost_auto": False, "boost_apps": {}, "boost_guard": 0, "boost_stats": {"freed": 0, "times": 0}, "paused": [],
+            "batt_goal": None, "day_night": False, "day_theme": "Daylight", "day_hours": [7, 19],
+            "remote": False, "remote_pin": "", "guest": False, "tv_auto": True, "fx_kind_filter": "all", "stores": True}
 
 
 class Config(dict):
@@ -709,6 +712,7 @@ class Joystick:
         self.stop = False
         self.name = None
         self.axes = {}
+        self.raw = {"buttons": {}, "axes": {}}
         threading.Thread(target=self.run, daemon=True).start()
 
     def run(self):
@@ -731,6 +735,7 @@ class Joystick:
 
     def read_loop(self, f):
         held = {}
+        self.raw = {"buttons": {}, "axes": {}}  # live state for the controller tester
         while not self.stop:
             ev = f.read(8)
             if len(ev) < 8:
@@ -738,6 +743,10 @@ class Joystick:
             _, value, etype, num = struct.unpack("<IhBB", ev)
             init = etype & 0x80
             etype &= 0x7F
+            if etype == 0x01:
+                self.raw["buttons"][num] = value
+            elif etype == 0x02:
+                self.raw["axes"][num] = value
             if init:
                 continue
             if etype == 0x01 and value:  # button down
@@ -851,3 +860,213 @@ def close_app(pids):
         except OSError:
             pass
     return n
+
+
+def pause_app(pids, on):
+    """Freeze (on=True) or wake up (on=False) an app's processes. A frozen app uses no CPU and Linux can push its
+    memory to swap when a game needs room. Returns how many processes were changed."""
+    n = 0
+    for pid in pids:
+        try:
+            if SYS:
+                open(f"{SYS}/proc/{pid}/paused", "w").write("1" if on else "0")
+            else:
+                os.kill(pid, 19 if on else 18)  # SIGSTOP / SIGCONT
+            n += 1
+        except OSError:
+            pass
+    return n
+
+
+def app_pids(name):
+    """Current pids of an app by the name memory_apps() gave it (an app restarts with new pids)."""
+    for a in memory_apps(min_bytes=0):
+        if a["name"] == name:
+            return a["pids"], a["rss"]
+    return [], 0
+
+
+# =====================================================================  more stores: Heroic (Epic, GOG, Amazon) and Lutris
+HEROIC_DIRS = [os.path.join(HOME, ".var", "app", "com.heroicgameslauncher.hgl", "config", "heroic"),
+               os.path.join(HOME, ".config", "heroic")]
+LUTRIS_DBS = [os.path.join(HOME, ".local", "share", "lutris", "pga.db"),
+              os.path.join(HOME, ".var", "app", "net.lutris.Lutris", "data", "lutris", "pga.db")]
+
+
+def _json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _size(v):
+    if isinstance(v, (int, float)):
+        return int(v)
+    m = re.match(r"\s*([\d.]+)\s*([KMGT]i?B)", str(v or ""), re.I)
+    if not m:
+        return 0
+    mult = {"k": 2**10, "m": 2**20, "g": 2**30, "t": 2**40}[m.group(2)[0].lower()]
+    return int(float(m.group(1)) * mult)
+
+
+def heroic_games():
+    """Games installed through Heroic. Untested on a real Deck: it reads Heroic's own files and skips anything it
+    doesn't understand."""
+    out = []
+    for base in HEROIC_DIRS:
+        if not os.path.isdir(base):
+            continue
+        titles, art = {}, {}
+        for lib, key in (("legendary_library.json", "library"), ("gog_library.json", "games"), ("nile_library.json", "library")):
+            data = _json(os.path.join(base, "store_cache", lib)) or {}
+            for it in data.get(key, []) if isinstance(data, dict) else []:
+                if isinstance(it, dict) and it.get("app_name"):
+                    titles[str(it["app_name"])] = it.get("title")
+                    art[str(it["app_name"])] = it.get("art_square") or it.get("art_cover")
+        epic = _json(os.path.join(base, "legendaryConfig", "legendary", "installed.json")) or {}
+        if isinstance(epic, dict):
+            for app, it in epic.items():
+                if isinstance(it, dict) and not it.get("is_dlc"):
+                    out.append(("legendary", "Epic", str(app), it.get("title") or titles.get(str(app)) or app,
+                                it.get("install_path"), _size(it.get("install_size")), art.get(str(app))))
+        gog = _json(os.path.join(base, "gog_store", "installed.json")) or {}
+        for it in gog.get("installed", []) if isinstance(gog, dict) else []:
+            if isinstance(it, dict) and it.get("appName"):
+                app = str(it["appName"])
+                out.append(("gog", "GOG", app, titles.get(app) or os.path.basename(str(it.get("install_path") or app)),
+                            it.get("install_path"), _size(it.get("install_size")), art.get(app)))
+        nile = _json(os.path.join(base, "nile_config", "nile", "installed.json")) or []
+        for it in nile if isinstance(nile, list) else []:
+            if isinstance(it, dict) and it.get("id"):
+                app = str(it["id"])
+                out.append(("nile", "Amazon", app, titles.get(app) or os.path.basename(str(it.get("path") or app)),
+                            it.get("path"), _size(it.get("size")), art.get(app)))
+        break
+    games = []
+    for runner, store, app, title, path, size, art_url in out:
+        cover = os.path.join(CACHE, "art", f"heroic_{runner}_{re.sub(r'[^A-Za-z0-9_-]', '_', app)}.jpg")
+        games.append({"id": f"heroic:{runner}:{app}", "appid": f"heroic:{app}", "name": title, "source": store, "lib": path,
+                      "size": size, "last": 0, "minutes": 0, "installdir": path or "", "updating": False,
+                      "launch": f"heroic://launch/{runner}/{app}", "opts": "", "wk2": 0, "tool": None, "tool_default": None,
+                      "cover": cover if os.path.exists(cover) else None, "hero": None, "art_url": art_url, "art_path": cover})
+    return games
+
+
+def lutris_games():
+    """Games installed in Lutris (its pga.db)."""
+    import sqlite3
+    for db in LUTRIS_DBS:
+        if not os.path.exists(db):
+            continue
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            rows = con.execute("select id, name, slug, runner, directory, lastplayed, playtime from games where installed = 1").fetchall()
+            con.close()
+        except Exception:
+            return []
+        out = []
+        art_dirs = [os.path.join(HOME, ".cache", "lutris", "coverart"), os.path.join(os.path.dirname(db), "coverart"),
+                    os.path.join(HOME, ".var", "app", "net.lutris.Lutris", "cache", "lutris", "coverart")]
+        for gid, name, slug, runner, directory, last, playtime in rows:
+            cover = next((p for d in art_dirs for p in (os.path.join(d, f"{slug}.jpg"), os.path.join(d, f"{slug}.png"))
+                          if slug and os.path.exists(p)), None)
+            try:
+                mins = int(float(playtime or 0) * 60)
+            except ValueError:
+                mins = 0
+            out.append({"id": f"lutris:{gid}", "appid": f"lutris:{gid}", "name": name or slug or f"Game {gid}", "source": "Lutris",
+                        "lib": directory, "size": 0, "last": int(last or 0), "minutes": mins, "installdir": directory or "",
+                        "updating": False, "launch": f"lutris:rungameid/{gid}", "opts": "", "wk2": 0, "tool": runner and runner.title(),
+                        "tool_default": None, "cover": cover, "hero": None})
+        return out
+    return []
+
+
+def norm_name(n):
+    return re.sub(r"[^a-z0-9]", "", re.sub(r"\b(the|edition|goty|definitive|remastered|complete)\b", "", (n or "").lower()))
+
+
+def duplicates(games):
+    """The same game installed from two places (Steam and Heroic, say): [[game, game], ...]."""
+    by = {}
+    for g in games:
+        if g.get("size") or g["source"] != "Non-Steam":
+            by.setdefault(norm_name(g["name"]), []).append(g)
+    return [v for k, v in by.items() if k and len(v) > 1 and len({g["source"] for g in v}) > 1]
+
+
+# =====================================================================  Desktop Mode startup apps
+AUTOSTART = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "autostart")
+AUTOSTART_OFF = os.path.join(DATA, "autostart-off")
+
+
+def startup_apps():
+    """Apps that start with Desktop Mode: [{name, file, on}]. Turning one off moves its file into Vanta's folder,
+    so turning it back on puts back exactly what was there."""
+    out = []
+    for folder, on in ((AUTOSTART, True), (AUTOSTART_OFF, False)):
+        for p in sorted(glob.glob(os.path.join(folder, "*.desktop"))):
+            text = read(p, "") or ""
+            name = next((l.split("=", 1)[1].strip() for l in text.splitlines() if l.startswith("Name=")), os.path.basename(p))
+            hidden = any(l.strip().lower() in ("hidden=true",) for l in text.splitlines())
+            out.append({"name": name, "file": p, "on": on and not hidden})
+    return out
+
+
+def set_startup(item, on):
+    dest = AUTOSTART if on else AUTOSTART_OFF
+    try:
+        os.makedirs(dest, exist_ok=True)
+        target = os.path.join(dest, os.path.basename(item["file"]))
+        if os.path.exists(target):
+            return False
+        shutil.move(item["file"], target)
+        return True
+    except OSError:
+        return False
+
+
+# =====================================================================  TV / dock
+def external_display():
+    """True when an HDMI or DisplayPort screen is plugged in (a dock or a USB-C to HDMI cable)."""
+    for st in glob.glob((SYS or "") + "/sys/class/drm/card*-*/status"):
+        con = os.path.basename(os.path.dirname(st))
+        if re.search(r"-(HDMI|DP)-", con) and (read(st[len(SYS):] if SYS else st, "") or "").strip() == "connected":
+            return True
+    return False
+
+
+# =====================================================================  backups
+BACKUP_DIR = os.path.join(HOME, "Documents", "Vanta Deck backups")
+
+
+def backup(cfg_data):
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    path = os.path.join(BACKUP_DIR, time.strftime("vanta-deck-%Y-%m-%d-%H%M.json"))
+    data = {k: v for k, v in cfg_data.items() if k not in ("remote_pin",)}  # never put the phone PIN in a backup
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"app": "Vanta Deck", "made": time.time(), "settings": data}, f, indent=1)
+    return path
+
+
+def backups():
+    return sorted(glob.glob(os.path.join(BACKUP_DIR, "vanta-deck-*.json")), reverse=True)
+
+
+def read_backup(path):
+    d = _json(path)
+    return d.get("settings") if isinstance(d, dict) and d.get("app") == "Vanta Deck" and isinstance(d.get("settings"), dict) else None
+
+
+def lan_ip():
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))  # no packet is sent: this just picks the network card
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()

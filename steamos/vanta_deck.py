@@ -18,9 +18,10 @@ import tkinter.font as tkfont
 from PIL import Image, ImageDraw, ImageFilter, ImageTk
 
 import deck_core as dc
+import deck_remote
 
 APP = "Vanta Deck"
-VERSION = "1.1"
+VERSION = "1.2"
 
 THEMES = {
     "Vanta": dict(bg="#0a0e17", panel="#121a29", panel2="#1a2438", line="#26324a", text="#eef2fb", muted="#8d99b3",
@@ -55,9 +56,61 @@ THEMES = {
                   accent="#d6a26b", accent2="#e8c9a0", good="#a3c47a", warn="#e8b04a", danger="#e06c5a", fx=None),
     "Mono": dict(bg="#0d0d0f", panel="#161619", panel2="#1e1e22", line="#2c2c31", text="#f2f2f2", muted="#9a9aa2",
                  accent="#f2f2f2", accent2="#9a9aa2", good="#d4d4d4", warn="#d4d4d4", danger="#ff6b6b", fx=None),
+    # ---- every other theme from Vanta for Windows (same colors; gradients and animations where they exist)
+    'Vanta OLED': {'bg': '#000000', 'panel': '#0c0d10', 'panel2': '#15171d', 'line': '#202330', 'text': '#f3f5fa', 'muted': '#878ea1', 'accent': '#8b7bff', 'accent2': '#4fd1ff', 'good': '#3ddc97', 'warn': '#ffb84d', 'danger': '#ff5c6c', 'fx': None},
+    'OLED Black': {'bg': '#000000', 'panel': '#0b0b0b', 'panel2': '#151515', 'line': '#262626', 'text': '#f2f2f2', 'muted': '#8a8a8a', 'accent': '#00c8ff', 'accent2': '#b36bff', 'good': '#2ee59d', 'warn': '#ffbf3c', 'danger': '#ff4d5e', 'fx': None},
+    'Phosphor': {'bg': '#020a04', 'panel': '#06150a', 'panel2': '#0b2212', 'line': '#14432a', 'text': '#b4ffc8', 'muted': '#56a872', 'accent': '#3cff78', 'accent2': '#78ffd2', 'good': '#3cff78', 'warn': '#ffd23c', 'danger': '#ff5a50', 'fx': None},
+    'Amber': {'bg': '#0d0800', 'panel': '#1a1100', 'panel2': '#251800', 'line': '#4a3200', 'text': '#ffd98a', 'muted': '#a8823a', 'accent': '#ffb000', 'accent2': '#ffe680', 'good': '#d6ff6a', 'warn': '#ff8c1a', 'danger': '#ff5a3c', 'fx': None},
+    'Cyberpunk': {'bg': '#0d0221', 'panel': '#170536', 'panel2': '#230a4c', 'line': '#3c1b70', 'text': '#f4ecff', 'muted': '#9d89c4', 'accent': '#ff2bd6', 'accent2': '#00e5ff', 'good': '#00ffa3', 'warn': '#ffe600', 'danger': '#ff3b5c', 'fx': None},
+    'Glacier': {'bg': '#0d1922', 'panel': '#132533', 'panel2': '#1a3143', 'line': '#284a62', 'text': '#e6f5ff', 'muted': '#8fb1c9', 'accent': '#7fd6ff', 'accent2': '#a8b8ff', 'good': '#7fffcf', 'warn': '#ffd27f', 'danger': '#ff7f8f', 'fx': None},
+    'Rose': {'bg': '#170a10', 'panel': '#22101a', 'panel2': '#2e1623', 'line': '#4c2539', 'text': '#ffe9f1', 'muted': '#c08da3', 'accent': '#ff6f9f', 'accent2': '#ffb38a', 'good': '#7fe0b0', 'warn': '#ffd27a', 'danger': '#ff4d4d', 'fx': None},
+    'High Contrast': {'bg': '#000000', 'panel': '#000000', 'panel2': '#121212', 'line': '#ffffff', 'text': '#ffffff', 'muted': '#e6e6e6', 'accent': '#ffd400', 'accent2': '#00e5ff', 'good': '#3dff7a', 'warn': '#ffd400', 'danger': '#ff4d4d', 'fx': None},
+    'Sandstone': {'bg': '#f4efe6', 'panel': '#fffaf2', 'panel2': '#f1e9db', 'line': '#dccfb8', 'text': '#2b2116', 'muted': '#7a6a55', 'accent': '#c2581b', 'accent2': '#2f7d6d', 'good': '#2e7d32', 'warn': '#a66a00', 'danger': '#b3261e', 'fx': None, 'light': True},
+    'Lavender': {'bg': '#f3f0fb', 'panel': '#ffffff', 'panel2': '#f2eefb', 'line': '#dcd3f0', 'text': '#1e1633', 'muted': '#6b5f8a', 'accent': '#6c47ff', 'accent2': '#e0457b', 'good': '#1b8a5a', 'warn': '#a86b00', 'danger': '#c9184a', 'fx': None, 'light': True},
+    'Sunset': {'bg': '#2f1438', 'panel': '#1c0f24', 'panel2': '#2a1733', 'line': '#4a2a52', 'text': '#fff0ea', 'muted': '#c9a3b0', 'accent': '#ff8a5c', 'accent2': '#ffc15e', 'good': '#7ee8a7', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': None, 'grad': ['#1b0f2e', '#4a1a3f', '#7a2f2f'], 'angle': 120},
+    'Deep Sea': {'bg': '#071a33', 'panel': '#06142a', 'panel2': '#0b1f3a', 'line': '#163a5c', 'text': '#e0f4ff', 'muted': '#7fa6c2', 'accent': '#22d3ee', 'accent2': '#60a5fa', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'bubbles', 'grad': ['#020617', '#0b2747', '#04303a'], 'angle': 100},
+    'Twilight': {'bg': '#22205a', 'panel': '#111735', 'panel2': '#1a2048', 'line': '#323a75', 'text': '#eef2ff', 'muted': '#a5b0db', 'accent': '#a5b4fc', 'accent2': '#f0abfc', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': None, 'grad': ['#0f172a', '#312e81', '#4c1d95'], 'angle': 140},
+    'Emerald': {'bg': '#053b2c', 'panel': '#03221a', 'panel2': '#073326', 'line': '#145a45', 'text': '#e7fff5', 'muted': '#86c9b0', 'accent': '#34d399', 'accent2': '#a3e635', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': None, 'grad': ['#021a12', '#064e3b', '#022c22'], 'angle': 110},
+    'Peach': {'bg': '#fff0ee', 'panel': '#ffffff', 'panel2': '#fff6f2', 'line': '#f1d9d4', 'text': '#2a1a1f', 'muted': '#8a6b70', 'accent': '#ff6b4a', 'accent2': '#8b5cf6', 'good': '#15803d', 'warn': '#b45309', 'danger': '#dc2626', 'fx': None, 'light': True, 'grad': ['#fff4e6', '#ffe3e3', '#f3e8ff'], 'angle': 125},
+    'Mint': {'bg': '#e6f8f8', 'panel': '#ffffff', 'panel2': '#f3fbf8', 'line': '#cfe8de', 'text': '#0f2a22', 'muted': '#5b7b70', 'accent': '#10b981', 'accent2': '#0ea5e9', 'good': '#059669', 'warn': '#b45309', 'danger': '#dc2626', 'fx': None, 'light': True, 'grad': ['#ecfdf5', '#e0f2fe'], 'angle': 135},
+    'Flow': {'bg': '#241a5a', 'panel': '#0d1230', 'panel2': '#161b42', 'line': '#2c3168', 'text': '#eef0ff', 'muted': '#9aa3d6', 'accent': '#7dd3fc', 'accent2': '#f0abfc', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'orbs', 'grad': ['#0f1d4a', '#3b1c7a', '#6b1747', '#0f1d4a'], 'angle': 135},
+    'Matrix': {'bg': '#000500', 'panel': '#010d03', 'panel2': '#03170a', 'line': '#0c3a18', 'text': '#b6ffc8', 'muted': '#4f9f63', 'accent': '#22ff66', 'accent2': '#9dffb8', 'good': '#22ff66', 'warn': '#e6ff4d', 'danger': '#ff5050', 'fx': 'rain'},
+    'Retro Grid': {'bg': '#1d0638', 'panel': '#140433', 'panel2': '#1f0a47', 'line': '#3c1a70', 'text': '#fdf0ff', 'muted': '#b392c9', 'accent': '#ff2bd6', 'accent2': '#29d6ff', 'good': '#3cf5c5', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'grid', 'grad': ['#0d0221', '#2d0a4e', '#3a0b45'], 'angle': 90},
+    'Lava': {'bg': '#2a0801', 'panel': '#1a0703', 'panel2': '#2a0e06', 'line': '#4f1d0e', 'text': '#ffe9dc', 'muted': '#c28b74', 'accent': '#ff6a1a', 'accent2': '#ffc23d', 'good': '#a3e635', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'embers', 'grad': ['#1a0400', '#3a0c02', '#120200'], 'angle': 95},
+    'CRT': {'bg': '#020a04', 'panel': '#06150a', 'panel2': '#0b2212', 'line': '#14432a', 'text': '#b4ffc8', 'muted': '#56a872', 'accent': '#3cff78', 'accent2': '#78ffd2', 'good': '#3cff78', 'warn': '#ffd23c', 'danger': '#ff5a50', 'fx': 'scan'},
+    'Minimal Dark': {'bg': '#0f0f10', 'panel': '#0f0f10', 'panel2': '#18181b', 'line': '#2c2c31', 'text': '#f4f4f5', 'muted': '#8b8b94', 'accent': '#f4f4f5', 'accent2': '#a1a1aa', 'good': '#86efac', 'warn': '#e0b04a', 'danger': '#f87171', 'fx': None},
+    'Minimal Light': {'bg': '#fafafa', 'panel': '#fafafa', 'panel2': '#f1f1f2', 'line': '#dcdce0', 'text': '#18181b', 'muted': '#71717a', 'accent': '#18181b', 'accent2': '#52525b', 'good': '#15803d', 'warn': '#a16207', 'danger': '#dc2626', 'fx': None, 'light': True},
+    'Terminal': {'bg': '#000000', 'panel': '#000000', 'panel2': '#0a120b', 'line': '#1f3a24', 'text': '#c8ffd4', 'muted': '#5f9a6b', 'accent': '#3cff78', 'accent2': '#7ff0ff', 'good': '#3cff78', 'warn': '#ffd23c', 'danger': '#ff5a50', 'fx': None},
+    'Fjord': {'bg': '#2e3440', 'panel': '#2e3440', 'panel2': '#3b4252', 'line': '#4c566a', 'text': '#eceff4', 'muted': '#a3acbd', 'accent': '#88c0d0', 'accent2': '#b48ead', 'good': '#a3be8c', 'warn': '#ebcb8b', 'danger': '#bf616a', 'fx': None},
+    'Paper': {'bg': '#f6f1e7', 'panel': '#f6f1e7', 'panel2': '#ece5d6', 'line': '#d6ccb8', 'text': '#2b2620', 'muted': '#7a7062', 'accent': '#2b2620', 'accent2': '#9c4221', 'good': '#2f6b3a', 'warn': '#a16207', 'danger': '#b42318', 'fx': None, 'light': True},
+    'High Contrast Light': {'bg': '#ffffff', 'panel': '#ffffff', 'panel2': '#f0f0f0', 'line': '#000000', 'text': '#000000', 'muted': '#1a1a1a', 'accent': '#0033cc', 'accent2': '#8a0099', 'good': '#006b1f', 'warn': '#7a4a00', 'danger': '#b00000', 'fx': None, 'light': True},
+    'Fireflies': {'bg': '#0b1d14', 'panel': '#0a1a12', 'panel2': '#10261b', 'line': '#1f4030', 'text': '#f2ffe9', 'muted': '#9ab8a2', 'accent': '#c8f560', 'accent2': '#ffd166', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'fireflies', 'grad': ['#06120c', '#0c2418', '#14140a'], 'angle': 100},
+    'Sakura Day': {'bg': '#fdeef4', 'panel': '#ffffff', 'panel2': '#fff5f9', 'line': '#f2d3e1', 'text': '#2b1622', 'muted': '#8a6577', 'accent': '#e0458a', 'accent2': '#8b5cf6', 'good': '#15803d', 'warn': '#a16207', 'danger': '#dc2626', 'fx': 'petals', 'light': True, 'grad': ['#fff1f6', '#fde4ef', '#f3e8ff'], 'angle': 130},
+    'Confetti': {'bg': '#160f33', 'panel': '#120c2a', 'panel2': '#1b1438', 'line': '#30285e', 'text': '#f5f3ff', 'muted': '#a7a2cf', 'accent': '#ffcc33', 'accent2': '#ff5fa2', 'good': '#4ade80', 'warn': '#ffcc33', 'danger': '#ff5d73', 'fx': 'confetti', 'grad': ['#0e0b24', '#1d1240', '#0b1630'], 'angle': 120},
+    'Tide': {'bg': '#05263a', 'panel': '#04192a', 'panel2': '#082438', 'line': '#14415f', 'text': '#e3f6ff', 'muted': '#86aec6', 'accent': '#38bdf8', 'accent2': '#2dd4bf', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'waves', 'grad': ['#031524', '#06304a', '#03202f'], 'angle': 95},
+    'Lagoon': {'bg': '#033532', 'panel': '#032523', 'panel2': '#073330', 'line': '#145550', 'text': '#e6fffb', 'muted': '#86c2b9', 'accent': '#5eead4', 'accent2': '#93c5fd', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'waves', 'grad': ['#022424', '#04403d', '#0b2a3a'], 'angle': 100},
+    'Lava Lamp': {'bg': '#240809', 'panel': '#1a0607', 'panel2': '#280c0d', 'line': '#4a1a1c', 'text': '#fff0e8', 'muted': '#c9968a', 'accent': '#ff6b3d', 'accent2': '#ffb02e', 'good': '#ff3d7f', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'orbs', 'grad': ['#1a0505', '#2a0a0f', '#1a0a02'], 'angle': 110},
+    'Northern Lights': {'bg': '#04141d', 'panel': '#041119', 'panel2': '#081c26', 'line': '#173847', 'text': '#eafff8', 'muted': '#89b3aa', 'accent': '#4ade80', 'accent2': '#e879f9', 'good': '#22d3ee', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'aurora', 'grad': ['#020b14', '#04202a', '#12082a'], 'angle': 115},
+    'Blizzard': {'bg': '#dde9f3', 'panel': '#ffffff', 'panel2': '#f2f7fb', 'line': '#c7d8e6', 'text': '#0f1d2a', 'muted': '#5a6f82', 'accent': '#2563eb', 'accent2': '#0891b2', 'good': '#15803d', 'warn': '#a16207', 'danger': '#dc2626', 'fx': 'snow', 'light': True, 'grad': ['#e8f1f8', '#d6e6f3'], 'angle': 90},
+    'Monsoon': {'bg': '#0f1b29', 'panel': '#0c1622', 'panel2': '#132233', 'line': '#24384f', 'text': '#e6f0fb', 'muted': '#8ea3ba', 'accent': '#60a5fa', 'accent2': '#a5b4fc', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'rain', 'grad': ['#0a121c', '#122133', '#0b1622'], 'angle': 95},
+    'Galaxy': {'bg': '#070a1f', 'panel': '#080b20', 'panel2': '#0f1430', 'line': '#222a55', 'text': '#eef1ff', 'muted': '#9aa2cc', 'accent': '#818cf8', 'accent2': '#f472b6', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'stars', 'grad': ['#02030a', '#0a0f2e', '#170a2e'], 'angle': 135},
+    'Prism': {'bg': '#1f1a3a', 'panel': '#120f24', 'panel2': '#1b1733', 'line': '#332d5c', 'text': '#f6f4ff', 'muted': '#aaa6cf', 'accent': '#f0abfc', 'accent2': '#67e8f9', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'orbs', 'grad': ['#3a0d4a', '#0d2f5c', '#0b4a45', '#4a3a0b', '#4a0d2a', '#3a0d4a'], 'angle': 135},
+    'Ocean Flow': {'bg': '#062a48', 'panel': '#04182c', 'panel2': '#08223a', 'line': '#17405f', 'text': '#e3f4ff', 'muted': '#88aac4', 'accent': '#22d3ee', 'accent2': '#818cf8', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'orbs', 'grad': ['#031a33', '#05445e', '#0a2a5c', '#031a33'], 'angle': 120},
+    'Vaporwave': {'bg': '#2a0b4a', 'panel': '#1c0838', 'panel2': '#260d48', 'line': '#45207a', 'text': '#fff0fb', 'muted': '#c39bd6', 'accent': '#2ef2ff', 'accent2': '#ff71ce', 'good': '#05ffa1', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': 'grid', 'grad': ['#1a0633', '#3d0f5c', '#0f3a5c'], 'angle': 90},
+    'Dusk': {'bg': '#2a2240', 'panel': '#151a2c', 'panel2': '#1e2238', 'line': '#363a5a', 'text': '#f3efff', 'muted': '#a9a4c6', 'accent': '#fb923c', 'accent2': '#c084fc', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': None, 'grad': ['#141e30', '#35234a', '#5c2a3a'], 'angle': 110},
+    'Citrus': {'bg': '#fbf8e4', 'panel': '#ffffff', 'panel2': '#fbfaf0', 'line': '#e7e3c3', 'text': '#1f2410', 'muted': '#6b6f4f', 'accent': '#65a30d', 'accent2': '#ea580c', 'good': '#15803d', 'warn': '#a16207', 'danger': '#dc2626', 'fx': None, 'light': True, 'grad': ['#fffbe6', '#ecfccb', '#fff1e0'], 'angle': 125},
+    'Berry': {'bg': '#2c0a33', 'panel': '#1c0721', 'panel2': '#280d2e', 'line': '#4a1a50', 'text': '#ffeefa', 'muted': '#c79bc0', 'accent': '#f43f9e', 'accent2': '#a78bfa', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': None, 'grad': ['#1a0620', '#3b0a3a', '#200a33'], 'angle': 130},
+    'Steel': {'bg': '#1a1f26', 'panel': '#13171c', 'panel2': '#1c2128', 'line': '#2f3640', 'text': '#eef2f6', 'muted': '#94a0ae', 'accent': '#7dd3fc', 'accent2': '#cbd5e1', 'good': '#5eead4', 'warn': '#ffd166', 'danger': '#ff5d73', 'fx': None, 'grad': ['#111418', '#1f252d', '#14181d'], 'angle': 100},
+    'Nightshade': {'bg': '#191a21', 'panel': '#21222c', 'panel2': '#2a2c38', 'line': '#3a3c4e', 'text': '#f8f8f2', 'muted': '#9ea2bd', 'accent': '#bd93f9', 'accent2': '#ff79c6', 'good': '#50fa7b', 'warn': '#f1fa8c', 'danger': '#ff5555', 'fx': None},
+    'Solar Dark': {'bg': '#002b36', 'panel': '#073642', 'panel2': '#0b3f4c', 'line': '#1d5563', 'text': '#eee8d5', 'muted': '#93a1a1', 'accent': '#2aa198', 'accent2': '#b58900', 'good': '#859900', 'warn': '#cb4b16', 'danger': '#dc322f', 'fx': None},
+    'Campfire': {'bg': '#1d2021', 'panel': '#282828', 'panel2': '#32302f', 'line': '#504945', 'text': '#ebdbb2', 'muted': '#a89984', 'accent': '#fe8019', 'accent2': '#fabd2f', 'good': '#b8bb26', 'warn': '#fabd2f', 'danger': '#fb4934', 'fx': None},
+    'Coffee': {'bg': '#1b1411', 'panel': '#251c18', 'panel2': '#2f2420', 'line': '#4a3a33', 'text': '#f3e7dc', 'muted': '#b09a8a', 'accent': '#d4a373', 'accent2': '#e9c46a', 'good': '#90be6d', 'warn': '#e9c46a', 'danger': '#e76f51', 'fx': None},
+    'Matcha': {'bg': '#f1f5ea', 'panel': '#fbfdf7', 'panel2': '#eef3e4', 'line': '#d5dfc3', 'text': '#1c2614', 'muted': '#5f6d52', 'accent': '#4d7c0f', 'accent2': '#b45309', 'good': '#15803d', 'warn': '#a16207', 'danger': '#dc2626', 'fx': None, 'light': True},
+    'Latte': {'bg': '#eff1f5', 'panel': '#ffffff', 'panel2': '#e6e9ef', 'line': '#ccd0da', 'text': '#4c4f69', 'muted': '#7c7f93', 'accent': '#8839ef', 'accent2': '#fe640b', 'good': '#15803d', 'warn': '#a16207', 'danger': '#dc2626', 'fx': None, 'light': True},
+    'Neon Night': {'bg': '#0a0a12', 'panel': '#12121e', 'panel2': '#1a1a2b', 'line': '#2b2b45', 'text': '#e9e9ff', 'muted': '#8f8fb8', 'accent': '#39ff14', 'accent2': '#ff2079', 'good': '#39ff14', 'warn': '#ffe600', 'danger': '#ff3355', 'fx': None},
 }
 TABS = [("home", "Home"), ("library", "Library"), ("play", "Play"), ("shots", "Shots"), ("storage", "Storage"), ("system", "System"),
-        ("settings", "Settings")]
+        ("tools", "Tools"), ("settings", "Settings")]
 BADGES = [("first", "First session", "Play a game with Vanta open"), ("marathon", "Marathon", "One session of 3 hours"),
           ("owl", "Night owl", "Start a game after midnight"), ("streak7", "Week streak", "Play 7 days in a row"),
           ("explorer", "Explorer", "Play 10 different games"), ("finisher", "Finisher", "Finish 3 games"),
@@ -75,6 +128,30 @@ def on_color(hexc):
     h = hexc.lstrip("#")
     r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
     return "#0b0f17" if (0.299 * r + 0.587 * g + 0.114 * b) > 150 else "#ffffff"
+
+
+class RemoteBridge:
+    """What the phone app server may ask of Vanta Deck."""
+
+    def __init__(self, app):
+        self.app = app
+
+    @property
+    def pin(self):
+        return self.app.cfg["remote_pin"]
+
+    def state(self):
+        return self.app.state()
+
+    def action(self, a, v):
+        return self.app.action(a, v)
+
+    def cover(self, gid):
+        g = self.app.game(gid)
+        return g["cover"] if g and g["cover"] else None
+
+    def shots(self):
+        return list(self.app.shots or [])
 
 
 class App:
@@ -119,6 +196,13 @@ class App:
         self.shots = None         # Steam screenshots, newest first
         self.ram = None           # (memory info, apps) for the RAM page
         self.search = ""
+        self.docked = False
+        self.boosted = False      # Game Boost already ran for the games running now
+        self.remote = None
+        self.startup = None
+        self.backups = None
+        self.theme_slot = "main"
+        self.theme_filter = "all"
         self.fx = None
         self.fx_cost = 0.01
         self.drag = None
@@ -133,6 +217,9 @@ class App:
         self.root.bind("<Key>", self.on_key)
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.joy = dc.Joystick(lambda b: self.jobs.put(("pad", b)))
+        self.wake_paused(quiet=True)  # apps left frozen if Vanta was closed mid-game
+        if self.cfg["remote"]:
+            self.root.after(500, lambda: self.set_remote(True, quiet=True))
         threading.Thread(target=self.load_library, daemon=True).start()
         self.root.after(50, self.pump)
         self.root.after(200, self.tick)
@@ -141,7 +228,14 @@ class App:
     # ------------------------------------------------------------------ basics
     @property
     def t(self):
-        return THEMES.get(self.cfg["theme"], THEMES["Vanta"])
+        return THEMES.get(self.theme_name(), THEMES["Vanta"])
+
+    def theme_name(self):
+        if self.cfg["day_night"]:
+            a, b = self.cfg["day_hours"]
+            if a <= time.localtime().tm_hour < b:
+                return self.cfg["day_theme"]
+        return self.cfg["theme"]
 
     def font(self, size, bold=False):
         key = (round(size), bold)
@@ -173,6 +267,9 @@ class App:
         self.root.after(2700, self.redraw)
 
     def quit(self):
+        self.wake_paused(quiet=True)
+        if self.remote:
+            self.remote.stop()
         try:
             self.cfg.save()
         except OSError:
@@ -199,6 +296,12 @@ class App:
             games, steam = dc.scan_library()
         except Exception:
             games, steam = [], None
+        if self.cfg["stores"]:
+            for fn in (dc.heroic_games, dc.lutris_games):
+                try:
+                    games += fn()
+                except Exception:
+                    pass
         self.call(lambda: self.library_ready(games, steam))
 
     def library_ready(self, games, steam):
@@ -207,8 +310,13 @@ class App:
         self.redraw()
         if self.cfg["art_fetch"]:
             todo = [g for g in games if g["source"] == "Steam" and (not g["cover"] or not g["hero"])]
+            other = [g for g in games if g.get("art_url") and not g["cover"] and str(g["art_url"]).startswith("https://")]
 
             def work():
+                for g in other[:200]:
+                    if dc.download(g["art_url"], g["art_path"]):
+                        g["cover"] = g["art_path"]
+                        self.call(self.redraw)
                 for g in todo[:300]:
                     if not g["cover"]:
                         p = dc.fetch_art(g["appid"], "cover")
@@ -280,11 +388,19 @@ class App:
 
     def track_done(self, ids):
         now = time.time()
+        was = bool(self.running)
         for aid in ids:
             self.running.setdefault(aid, now)
+        if self.running and not was and self.cfg["boost_auto"] and not self.boosted:
+            self.boost(auto=True)
+        if not ids and was:
+            self.boosted = False
+            self.root.after(3000, self.wake_paused)
         for aid in [a for a in self.running if a not in ids]:
             start = self.running.pop(aid)
             dur = now - start
+            if dur >= 60 and self.cfg["guest"]:
+                continue  # guest mode: nothing is remembered
             if dur >= 60:
                 g = next((x for x in self.library or [] if x["appid"] == aid), None)
                 self.cfg["sessions"] = ([{"appid": aid, "name": g["name"] if g else f"App {aid}", "start": start, "dur": dur}]
@@ -352,7 +468,10 @@ class App:
         self._ticks = n
         if n % 4 == 0 and self.library is not None:
             self.track()
-        self.sample_power()
+        if not self.cfg["guest"]:
+            self.sample_power()
+        if n % 5 == 0:
+            self.background(self.check_env)
         if not self.page and self.tab in ("system", "home", "play") or n % 15 == 0:
             self.redraw()
         if n % 60 == 0:
@@ -492,7 +611,10 @@ class App:
         if W < 50 or H < 50:
             return
         self.W, self.H = W, H
-        self.k = min(W / 1280, H / 800) * self.cfg["ui_scale"] / 100
+        scale = self.cfg["ui_scale"]
+        if self.cfg["tv_auto"] and self.docked:
+            scale = max(scale, 130)
+        self.k = min(W / 1280, H / 800) * scale / 100
         c.delete("all")
         self.regions = []
         T, k = self.t, self.k
@@ -504,11 +626,13 @@ class App:
             self.draw_shot_view(self.page[1])
         elif self.page and self.page[0] == "ram":
             self.draw_ram()
+        elif self.page and self.page[0] in ("goal", "remote", "startup", "pad", "backup", "themes"):
+            getattr(self, "draw_" + self.page[0])()
         else:
             self.draw_topbar(W)
             y0 = 92 * k
             {"home": self.draw_home, "library": self.draw_library, "play": self.draw_play, "shots": self.draw_shots,
-             "storage": self.draw_storage, "system": self.draw_system,
+             "storage": self.draw_storage, "system": self.draw_system, "tools": self.draw_tools,
              "settings": self.draw_settings}[self.tab](40 * k, y0, W - 40 * k, H - 54 * k)
             self.draw_hints(W, H)
         if self.focus and not any(r["id"] == self.focus for r in self.regions):
@@ -533,6 +657,8 @@ class App:
         key = ("bd", W, H, self.cfg["theme"])
         if key not in self.imgs:
             im = Image.new("RGB", (max(1, W // 4), max(1, H // 4)), tuple(int(T["bg"][i:i + 2], 16) for i in (1, 3, 5)))
+            if T.get("grad"):
+                im = self.gradient(im.size, T["grad"], T.get("angle", 120))
             d = ImageDraw.Draw(im)
             a = tuple(int(T["accent"][i:i + 2], 16) for i in (1, 3, 5))
             a2 = tuple(int(T["accent2"][i:i + 2], 16) for i in (1, 3, 5))
@@ -547,6 +673,26 @@ class App:
             self.imgs[key] = ImageTk.PhotoImage(im)
         self.c.create_image(0, 0, image=self.imgs[key], anchor="nw", tags=("backdrop",))
         self.fx_draw(W, H)
+
+    @staticmethod
+    def gradient(size, stops, angle):
+        w, h = size
+        cols = [tuple(int(c[i:i + 2], 16) for i in (1, 3, 5)) for c in stops]
+        a = math.radians(angle)
+        dx, dy = math.sin(a), -math.cos(a)
+        lo = min(0 * dx + 0 * dy, w * dx, h * dy, w * dx + h * dy)
+        hi = max(0 * dx + 0 * dy, w * dx, h * dy, w * dx + h * dy)
+        im = Image.new("RGB", size)
+        px = im.load()
+        n = len(cols) - 1
+        for y in range(h):
+            for x in range(w):
+                f = ((x * dx + y * dy) - lo) / max(1e-6, hi - lo) * n
+                i = min(int(f), n - 1) if n else 0
+                t = f - i
+                a_, b_ = cols[i], cols[min(i + 1, n)]
+                px[x, y] = tuple(int(a_[j] + (b_[j] - a_[j]) * t) for j in range(3))
+        return im
 
     def draw_topbar(self, W):
         T, k = self.t, self.k
@@ -601,12 +747,24 @@ class App:
             self.rr(x - w, H - 38 * k, x, H - 14 * k, 12 * k, T["panel2"])
             self.text(x - w / 2, H - 26 * k, key, fb, T["text"], anchor="center")
             x -= w + 20 * k
+        g = None
         if self.running:
             g = next((x for x in self.library or [] if x["appid"] in self.running), None)
             if g:
                 s = self.running[g["appid"]]
                 self.text(40 * k, H - 26 * k, f"● Playing {g['name']}  ·  {dc.fmt_duration(time.time() - s)}", self.font(14 * k, True),
                           T["good"], anchor="w")
+        extra = [lab for on, lab in ((self.cfg["guest"], "GUEST MODE"), (bool(self.cfg["paused"]), f"{len(self.cfg['paused'])} APP{'S' if len(self.cfg['paused']) != 1 else ''} FROZEN"),
+                                     (bool(self.cfg["batt_goal"]), "GOAL " + time.strftime("%H:%M", time.localtime(self.cfg["batt_goal"] or 0))))
+                 if on]
+        if extra:
+            ex = 40 * k + (self.font(14 * k, True).measure("● Playing " + (g["name"] if self.running and g else "")) + 140 * k
+                           if self.running and g else 0)
+            for lab in extra:
+                w = fb.measure(lab) + 20 * k
+                self.rr(ex, H - 38 * k, ex + w, H - 14 * k, 12 * k, mix(T["panel2"], T["warn"], 0.35))
+                self.text(ex + w / 2, H - 26 * k, lab, fb, T["text"], anchor="center")
+                ex += w + 8 * k
 
     def card(self, x0, y0, x1, y1, title=None):
         T, k = self.t, self.k
@@ -651,7 +809,7 @@ class App:
                 bits.append(dc.fmt_bytes(g["size"]))
             bits.append(g["source"])
             self.text(tx, y0 + hh - 100 * k, "  ·  ".join(bits), self.font(15 * k), T["muted"], maxw=x1 - tx - 30 * k)
-            note = (self.cfg["notes"].get(g["id"]) or {}).get("text")
+            note = (self.cfg["notes"].get(g["id"]) or {}).get("text") if not self.cfg["guest"] else None
             if note:
                 self.text(tx, y0 + hh - 76 * k, "✎ " + note, self.font(14 * k, True), mix(T["text"], T["accent"], 0.4),
                           maxw=x1 - tx - 30 * k)
@@ -704,7 +862,7 @@ class App:
                   anchor="center")
 
     # ------------------------------------------------------------------ Library
-    FILTERS = [("all", "All"), ("steam", "Steam"), ("nonsteam", "Non-Steam"), ("fav", "★ Favorites"), ("queue", "Up next"),
+    FILTERS = [("all", "All"), ("steam", "Steam"), ("nonsteam", "Other stores"), ("fav", "★ Favorites"), ("queue", "Up next"),
                ("finished", "Finished")]
     SORTS = [("recent", "Recent"), ("az", "A–Z"), ("played", "Most played"), ("rating", "Your rating"), ("size", "Size")]
 
@@ -786,7 +944,7 @@ class App:
             badge = "PLAYING" if g["appid"] in self.running else ("UPDATING" if g.get("updating") else
                                                                    ("✓ FINISHED" if g["id"] in self.cfg["finished"] else None))
             self.cover(g, gx, ty, gx + tw, ty + th, "g_" + g["id"], lambda gid=g["id"]: self.open_game(gid), badge=badge)
-            sub = dc.fmt_duration(g["minutes"] * 60) if g["minutes"] else ("Non-Steam" if g["source"] != "Steam" else "Not played")
+            sub = dc.fmt_duration(g["minutes"] * 60) if g["minutes"] else (g["source"] if g["source"] != "Steam" else "Not played")
             if self.cfg["ratings"].get(g["id"]):
                 sub = "★" * self.cfg["ratings"][g["id"]] + "  " + sub
             self.text(gx + 2 * k, ty + th + 6 * k, sub, self.font(12.5 * k), T["muted"], maxw=tw)
@@ -811,7 +969,7 @@ class App:
 
     def wheel(self, d):
         key = ({"library": "lib", "storage": "storage", "settings": "settings", "play": "play", "shots": "shots"}.get(self.tab)
-               if not self.page else {"game": "game", "ram": "ram"}.get(self.page[0]))
+               if not self.page else {"game": "game", "ram": "ram", "themes": "themes"}.get(self.page[0]))
         if key:
             self.scroll[key] = self.scroll.get(key, 0) + d * 120 * self.k
             self.redraw()
@@ -845,7 +1003,7 @@ class App:
         if g["appid"] in self.running:
             self.show_toast(f"{g['name']} is already running")
             return
-        if dc.launch(g["launch"]):
+        if (dc.launch(g["launch"]) if g["launch"].startswith("steam://") else dc.open_url(g["launch"])):
             self.show_toast(f"Starting {g['name']}…")
             self.cfg["home_sel"] = g["id"]
         else:
@@ -945,10 +1103,12 @@ class App:
             cards.append({"title": "HOW IT RUNS", "lines": lines or [("No ratings yet", "muted")],
                           "buttons": [("PROTONDB", lambda: dc.open_url(f"https://www.protondb.com/app/{g['appid']}"))]})
         note = (self.cfg["notes"].get(g["id"]) or {}).get("text")
-        cards.append({"title": "✎ NOTE", "lines": [(note, "text")] if note else [("Where you left off, a boss to beat, settings that "
+        guest = self.cfg["guest"]
+        if not guest:
+            cards.append({"title": "✎ NOTE", "lines": [(note, "text")] if note else [("Where you left off, a boss to beat, settings that "
                                                                                  "worked… Shown on Home.", "muted")],
-                      "buttons": [("EDIT NOTE" if note else "WRITE A NOTE", lambda: self.edit_note(g))] +
-                                 ([("CLEAR", lambda: self.save_note(g, ""))] if note else [])})
+                          "buttons": [("EDIT NOTE" if note else "WRITE A NOTE", lambda: self.edit_note(g))] +
+                                     ([("CLEAR", lambda: self.save_note(g, ""))] if note else [])})
         r = self.cfg["ratings"].get(g["id"], 0)
         cards.append({"title": "YOUR RATING", "lines": [("★" * r + "☆" * (5 - r) + f"   {r} of 5  ·  tap the same stars to clear", "warn")]
                       if r else [("How good is it? The library can sort by your rating.", "muted")],
@@ -968,7 +1128,7 @@ class App:
             cards.append({"title": "SCREENSHOTS", "lines": [(f"{len(shots)} screenshot{'s' if len(shots) != 1 else ''}  ·  "
                                                              f"latest {dc.ago(shots[0]['t'])}", "text")],
                           "buttons": [("VIEW", lambda: self.show_game_shots(g))]})
-        ss = [x for x in self.cfg["sessions"] if x["appid"] == g["appid"]]
+        ss = [x for x in self.cfg["sessions"] if x["appid"] == g["appid"]] if not guest else []
         if ss:
             tot = sum(x["dur"] for x in ss)
             lines = [(f"{len(ss)} sessions tracked  ·  {dc.fmt_duration(tot)}  ·  about {dc.fmt_duration(tot / len(ss))} each", "text")]
@@ -1156,6 +1316,11 @@ class App:
 
     def draw_play(self, x0, y0, x1, y1):
         T, k = self.t, self.k
+        if self.cfg["guest"]:
+            self.text((x0 + x1) / 2, (y0 + y1) / 2 - 20 * k, "Guest mode is on", self.font(26 * k, True), T["text"], anchor="center")
+            self.text((x0 + x1) / 2, (y0 + y1) / 2 + 20 * k, "Your play stats are hidden and nothing new is tracked. Turn it off in Tools.",
+                      self.font(16 * k), T["muted"], anchor="center")
+            return
         off = self.scroll.get("play", 0)
         top = y0
         y0 = y0 - off
@@ -1427,6 +1592,15 @@ class App:
             self.call(lambda: (setattr(self, "ram", res), self.redraw()))
         self.background(work)
 
+    def set_boost_app(self, name, mode):
+        apps = dict(self.cfg["boost_apps"])
+        if mode:
+            apps[name] = mode
+        else:
+            apps.pop(name, None)
+        self.cfg["boost_apps"] = apps
+        self.redraw()
+
     def close_ram_app(self, app):
         n = dc.close_app(app["pids"])
         self.show_toast(f"Asked {app['name']} to close: about {dc.fmt_bytes(app['rss'])} back" if n else f"Couldn't close {app['name']}")
@@ -1442,7 +1616,8 @@ class App:
         W, H = self.W, self.H
         x0, x1 = 48 * k, W - 48 * k
         self.button("ram_back", 32 * k, 26 * k, 140 * k, 68 * k, "‹  BACK", self.close_page, "ghost")
-        self.text(160 * k, 47 * k, "MEMORY", self.font(22 * k, True), T["text"], anchor="w")
+        self.text(160 * k, 47 * k, "GAME BOOST", self.font(22 * k, True), T["text"], anchor="w")
+        self.button("ram_boost", x1 - 380 * k, 28 * k, x1 - 190 * k, 66 * k, "BOOST NOW", self.boost, "accent", 13)
         self.button("ram_rescan", x1 - 170 * k, 28 * k, x1, 66 * k, "CHECK AGAIN", self.scan_ram, "normal", 13)
         if self.ram is None:
             self.text(W / 2, H / 2, "Looking at memory…", self.font(20 * k), T["muted"], anchor="center")
@@ -1462,17 +1637,31 @@ class App:
                 sub += f"  ·  swap {dc.fmt_bytes(info['swap_used'])} of {dc.fmt_bytes(info['swap_total'])}"
             sub += f"  ·  {dc.fmt_bytes(info['cached'])} is cache Linux hands back by itself when a game needs it"
             self.text(x0 + 22 * k, y + 90 * k, sub, self.font(13.5 * k), T["muted"], maxw=x1 - x0 - 44 * k)
-            y += 140 * k
+            y += 136 * k
+        # automatic: when a game starts, and when memory runs low while playing
+        self.rr(x0, y, x1, y + 58 * k, 16 * k, mix(T["panel"], T["bg"], 0.1))
+        on = self.cfg["boost_auto"]
+        self.text(x0 + 20 * k, y + 29 * k, "When a game starts", self.font(15 * k, True), T["text"], anchor="w")
+        self.button("ram_auto", x0 + 210 * k, y + 11 * k, x0 + 300 * k, y + 47 * k, "ON" if on else "OFF",
+                    lambda: self.set_cfg("boost_auto", not self.cfg["boost_auto"]), "accent" if on else "normal", 13)
+        self.text(x0 + 340 * k, y + 29 * k, "If memory gets low", self.font(15 * k, True), T["text"], anchor="w")
+        self.chip_row("guard", x0 + 520 * k, y + 10 * k, [(0, "Off"), (10, "Under 10%"), (15, "Under 15%"), (20, "Under 20%")],
+                      self.cfg["boost_guard"], lambda v: self.set_cfg("boost_guard", v), x1 - 10 * k)
+        y += 72 * k
+        names = {a["name"] for a in apps}
+        apps = apps + [{"name": n, "pids": [], "rss": 0, "gone": True} for n in self.cfg["boost_apps"] if n not in names]
         tot = sum(a["rss"] for a in apps)
         self.text(x0, y, f"BACKGROUND APPS  ·  {dc.fmt_bytes(tot)}" if apps else "BACKGROUND APPS", self.font(13 * k, True), T["muted"])
-        if len(apps) > 1:
+        if len([a for a in apps if not a.get("gone")]) > 1:
+            apps_live = [a for a in apps if not a.get("gone")]
             armed = self.is_armed("ram_all")
             self.button("ram_all", x1 - 220 * k, y - 10 * k, x1, y + 28 * k, "TAP AGAIN" if armed else "CLOSE ALL",
-                        lambda: self.confirm("ram_all", lambda: self.close_all_ram(apps), "Tap again to close every app listed"),
+                        lambda: self.confirm("ram_all", lambda: self.close_all_ram(apps_live), "Tap again to close every app listed"),
                         "danger" if armed else "normal", 13)
         y += 34 * k
         if not apps:
-            self.text(x0, y, "Nothing to close: no apps of yours are running in the background.", self.font(15 * k), T["good"])
+            self.text(x0, y, "Nothing to close: no apps of yours are running in the background. "
+                      "Apps you start in Desktop Mode (a browser, Discord) show up here.", self.font(15 * k), T["good"], maxw=x1 - x0)
             y += 30 * k
         off = self.scroll.get("ram", 0)
         top = y
@@ -1481,19 +1670,525 @@ class App:
             if y >= top - 2 and y < H - 60 * k:
                 self.rr(x0, y, x1, y + 56 * k, 14 * k, mix(T["panel"], T["bg"], 0.1))
                 self.text(x0 + 18 * k, y + 28 * k, a["name"], self.font(15 * k, True), T["text"], anchor="w", maxw=(x1 - x0) * 0.45)
-                self.text(x0 + (x1 - x0) * 0.5, y + 28 * k,
-                          f"{dc.fmt_bytes(a['rss'])}  ·  {len(a['pids'])} process{'es' if len(a['pids']) != 1 else ''}",
-                          self.font(14 * k), T["muted"], anchor="w")
+                if not a.get("gone"):
+                    self.text(x0 + (x1 - x0) * 0.3, y + 28 * k,
+                              f"{dc.fmt_bytes(a['rss'])}  ·  {len(a['pids'])} process{'es' if len(a['pids']) != 1 else ''}",
+                              self.font(14 * k), T["muted"], anchor="w")
+                mode = self.cfg["boost_apps"].get(a["name"], "")
+                self.text(x0 + (x1 - x0) * 0.5, y + 28 * k, "Boost:", self.font(13 * k, True), T["muted"], anchor="w")
+                self.chip_row(f"bm{i}", x0 + (x1 - x0) * 0.5 + 60 * k, y + 9 * k, [("", "Leave"), ("close", "Close"), ("pause", "Freeze")],
+                              mode, lambda v, n=a["name"]: self.set_boost_app(n, v))
                 key = "ram_" + a["name"]
                 armed = self.is_armed(key)
-                self.button(f"ramc_{i}", x1 - 150 * k, y + 9 * k, x1 - 12 * k, y + 47 * k, "TAP AGAIN" if armed else "CLOSE",
-                            lambda a_=a, k_=key: self.confirm(k_, lambda: self.close_ram_app(a_), f"Tap again to close {a_['name']}"),
-                            "danger" if armed else "normal", 13)
+                if not a.get("gone"):
+                    self.button(f"ramc_{i}", x1 - 150 * k, y + 9 * k, x1 - 12 * k, y + 47 * k, "TAP AGAIN" if armed else "CLOSE NOW",
+                                lambda a_=a, k_=key: self.confirm(k_, lambda: self.close_ram_app(a_), f"Tap again to close {a_['name']}"),
+                                "danger" if armed else "normal", 13)
+                else:
+                    self.text(x1 - 20 * k, y + 28 * k, "not running", self.font(13 * k), T["muted"], anchor="e")
             y += 64 * k
         self.clamp_scroll("ram", y + off - top - (H - 60 * k - top))
         self.region("ram_scroll", x0, top, x1, H, None, scroll="ram")
-        self.text(x0, H - 30 * k, "Steam, Game Mode, system services and your running game are never listed. Closing an app is like "
-                  "closing its window: save your work in it first.", self.font(12.5 * k), T["muted"], maxw=x1 - x0)
+        st = self.cfg["boost_stats"]
+        self.text(x0, H - 30 * k, (f"Freed about {dc.fmt_bytes(st.get('freed', 0))} over {st.get('times', 0)} boosts.  " if st.get("times") else "") +
+                  "Freeze pauses an app while you play and wakes it when you stop. Steam, Game Mode and your game are never listed.",
+                  self.font(12.5 * k), T["muted"], maxw=x1 - x0)
+
+    # ------------------------------------------------------------------ Game Boost: close or freeze the apps you picked
+    def boost(self, auto=False, reason=None):
+        """Runs off the UI thread; reports back with a toast."""
+        picks = dict(self.cfg["boost_apps"])
+        if not picks:
+            if not auto:
+                self.show_toast("Pick apps on the Game Boost page first (Tools › Game Boost)")
+            return
+
+        def work():
+            try:
+                apps = dc.memory_apps(min_bytes=0)
+            except Exception:
+                apps = []
+            closed, paused, freed = [], [], 0
+            for a in apps:
+                mode = picks.get(a["name"])
+                if mode == "close" and dc.close_app(a["pids"]):
+                    closed.append(a["name"])
+                    freed += a["rss"]
+                elif mode == "pause" and self.running and dc.pause_app(a["pids"], True):
+                    paused.append({"name": a["name"], "pids": a["pids"]})
+                    freed += a["rss"]
+            self.call(lambda: self.boost_done(closed, paused, freed, auto, reason))
+        self.boosted = True
+        self.background(work)
+
+    def boost_done(self, closed, paused, freed, auto, reason):
+        if paused:
+            self.cfg["paused"] = self.cfg["paused"] + paused
+        st = dict(self.cfg["boost_stats"])
+        if closed or paused:
+            st["freed"] = st.get("freed", 0) + freed
+            st["times"] = st.get("times", 0) + 1
+            self.cfg["boost_stats"] = st
+            bits = []
+            if closed:
+                bits.append(f"closed {', '.join(closed)}")
+            if paused:
+                bits.append(f"froze {', '.join(p['name'] for p in paused)}")
+            self.show_toast(f"{reason or 'Game Boost'}: {' and '.join(bits)}, about {dc.fmt_bytes(freed)} back")
+        elif not auto:
+            self.show_toast("Game Boost: none of your picked apps are running")
+        if self.page and self.page[0] == "ram":
+            self.root.after(1200, self.scan_ram)
+
+    def wake_paused(self, quiet=False):
+        if not self.cfg["paused"]:
+            return
+        names = []
+        for it in self.cfg["paused"]:
+            if dc.pause_app(it.get("pids", []), False):
+                names.append(it.get("name", "?"))
+        self.cfg["paused"] = []
+        if names and not quiet:
+            self.show_toast(f"Woke up {', '.join(dict.fromkeys(names))}")
+
+    def check_env(self):
+        """Every few seconds, off the UI thread: TV / dock, and the low-memory guard while a game runs."""
+        docked = dc.external_display()
+        low = None
+        if self.running and self.cfg["boost_guard"] and not self.boosted:
+            info = dc.memory_info()
+            if info and info["avail"] / info["total"] * 100 < self.cfg["boost_guard"]:
+                low = info
+
+        def back():
+            if docked != self.docked:
+                self.docked = docked
+                self.redraw()
+            if low and not self.boosted:
+                self.boost(auto=True, reason="Memory was low")
+        self.call(back)
+
+    # ------------------------------------------------------------------ phone app
+    def set_remote(self, on, quiet=False):
+        if on and not self.remote:
+            if not self.cfg["remote_pin"]:
+                self.cfg["remote_pin"] = f"{random.SystemRandom().randint(0, 999999):06d}"
+            try:
+                self.remote = deck_remote.Remote(RemoteBridge(self))
+            except OSError:
+                self.remote = None
+                self.cfg["remote"] = False
+                if not quiet:
+                    self.show_toast(f"Couldn't start the phone app: port {deck_remote.PORT} is busy")
+                return
+            self.cfg["remote"] = True
+            self.remote_ip = dc.lan_ip()
+        elif not on and self.remote:
+            self.remote.stop()
+            self.remote = None
+            self.cfg["remote"] = False
+        self.redraw()
+
+    def state(self):
+        """For the phone: a snapshot of what's on screen (called from the server thread, so read-only)."""
+        s = self.stats or {}
+        b = s.get("batt") or {}
+        g = self.game_by_appid(next(iter(self.running))) if self.running else None
+        mem = s.get("mem")
+        u = (lambda v: f"{v * 9 / 5 + 32:.0f}°F") if self.cfg["fahrenheit"] else (lambda v: f"{v:.0f}°C")
+        st = self.cfg["boost_stats"]
+        lib = self.recent()[:30] if not self.cfg["guest"] else []
+        return {"clock": time.strftime("%H:%M"), "game": g["name"] if g else (f"App {next(iter(self.running))}" if self.running else None),
+                "game_for": dc.fmt_duration(time.time() - next(iter(self.running.values()))) if self.running else "",
+                "batt": {"pct": b.get("pct"), "text": (b.get("status", "").lower() + (f" · {b['watts']:.1f} W" if b.get("watts") else "") +
+                                                       (f" · {dc.fmt_duration(b['left'])} left" if b.get("left") else ""))},
+                "today": dc.fmt_duration(self.played_today()), "streak": self.streak(),
+                "cpu": round(s["cpu"]) if s.get("cpu") is not None else None, "gpu": round(s["gpu"]) if s.get("gpu") is not None else None,
+                "cpu_temp": u(s["cpu_temp"]) if s.get("cpu_temp") else "", "gpu_temp": u(s["gpu_temp"]) if s.get("gpu_temp") else "",
+                "ram_text": f"{mem[0] / 2**30:.1f} of {mem[1] / 2**30:.0f} GB" if mem else "–",
+                "ram_pct": round(mem[0] / mem[1] * 100) if mem else 0,
+                "boost_text": (f"Freed about {dc.fmt_bytes(st.get('freed', 0))} over {st.get('times', 0)} boosts" if st.get("times")
+                               else "Pick apps to close or freeze in Vanta Deck › Tools › Game Boost"),
+                "goal": self.goal_text()[0] if self.cfg["batt_goal"] else None,
+                "games": [{"id": x["id"], "name": x["name"], "cover": bool(x["cover"])} for x in lib]}
+
+    def action(self, a, v):
+        if a == "play":
+            g = self.game(str(v))
+            if not g:
+                return "Game not found"
+            self.call(lambda: self.play(g))
+            return f"Starting {g['name']} on the Deck"
+        if a == "boost":
+            if not self.cfg["boost_apps"]:
+                return "Pick apps on the Deck first: Tools › Game Boost"
+            self.call(lambda: self.boost())
+            return "Game Boost running"
+        return "Unknown action"
+
+
+
+    # ------------------------------------------------------------------ battery goal
+    def goal_text(self):
+        """(headline, detail lines, state) for the battery goal."""
+        end = self.cfg["batt_goal"]
+        b = (self.stats or {}).get("batt") or {}
+        if not end:
+            return None, [], None
+        left_s = end - time.time()
+        if left_s <= 0:
+            return "Goal reached", ["You made it. Set a new goal any time."], "good"
+        if not b or not b.get("full_wh") or b.get("pct") is None:
+            return "No battery reading yet", [], None
+        if b.get("status") != "Discharging":
+            return f"Until {time.strftime('%H:%M', time.localtime(end))}: plugged in", ["The goal counts once you unplug."], None
+        wh = b["full_wh"] * b["pct"] / 100
+        need = wh / (left_s / 3600)
+        h = self.sensors.hist.get("watts") or []
+        now_w = sum(h[-30:]) / len(h[-30:]) if h else b.get("watts") or 0
+        lines = [f"{wh:.1f} Wh left for {dc.fmt_duration(left_s)}: you can use about {need:.1f} W on average",
+                 f"Right now the Deck draws {now_w:.1f} W"]
+        if not now_w or now_w <= need:
+            return f"On track for {time.strftime('%H:%M', time.localtime(end))}", lines, "good"
+        tdp = max(3, min(15, int(need - 3.5)))
+        lines += [f"Open the Quick Access menu (…) › Performance and set a TDP limit of about {tdp} W",
+                  "A frame limit of 30 or 40 fps and lower brightness help too"]
+        return f"Short by about {dc.fmt_duration(left_s - wh / now_w * 3600)} at this rate", lines, "warn"
+
+    def set_goal(self, hours):
+        self.cfg["batt_goal"] = time.time() + hours * 3600 if hours else None
+        self.redraw()
+
+    # ------------------------------------------------------------------ Tools tab
+    def tools(self):
+        st = self.cfg["boost_stats"]
+        return [("tool_boost", "Game Boost", "Close or freeze the apps you pick when a game starts" +
+                 (f"  ·  freed {dc.fmt_bytes(st.get('freed', 0))} so far" if st.get("times") else ""),
+                 "AUTO" if self.cfg["boost_auto"] else None, self.open_ram),
+                ("tool_goal", "Battery goal", "Play until a time you pick: Vanta tells you what to change to make it",
+                 "ON" if self.cfg["batt_goal"] else None, lambda: self.open_page("goal")),
+                ("tool_remote", "Phone app", "Stats, your games and Game Boost from your phone's browser",
+                 "ON" if self.remote else None, lambda: self.open_page("remote")),
+                ("tool_startup", "Startup apps", "What starts with Desktop Mode: turn off what you don't need",
+                 None, lambda: (self.load_startup(), self.open_page("startup"))),
+                ("tool_pad", "Controller test", "See every button and stick live, and check for drift", None, lambda: self.open_page("pad")),
+                ("tool_backup", "Backup & restore", "Save your notes, ratings, sessions and settings to a file",
+                 None, lambda: (self.load_backups(), self.open_page("backup"))),
+                ("tool_guest", "Guest mode", "Someone else playing? Nothing is tracked and your notes are hidden",
+                 "ON" if self.cfg["guest"] else "OFF", self.toggle_guest),
+                ("tool_tv", "TV mode", "Bigger text automatically when a TV or monitor is plugged in" +
+                 ("  ·  connected now" if self.docked else ""), "ON" if self.cfg["tv_auto"] else "OFF",
+                 lambda: self.set_cfg("tv_auto", not self.cfg["tv_auto"]))]
+
+    def toggle_guest(self):
+        self.cfg["guest"] = not self.cfg["guest"]
+        self.show_toast("Guest mode on: nothing is tracked, notes are hidden" if self.cfg["guest"] else "Guest mode off")
+        self.redraw()
+
+    def open_page(self, name):
+        self.page = (name,)
+        self.focus = None
+        self.hide_entry()
+        self.redraw()
+
+    def draw_tools(self, x0, y0, x1, y1):
+        T, k = self.t, self.k
+        items = self.tools()
+        cols, gap = 4, 16 * k
+        tw = (x1 - x0 - gap * (cols - 1)) / cols
+        th = (y1 - y0 - gap) / 2
+        for i, (rid, title, sub, badge, fn) in enumerate(items):
+            r_, cn = divmod(i, cols)
+            tx, ty = x0 + cn * (tw + gap), y0 + r_ * (th + gap)
+            on = badge in ("ON", "AUTO")
+            self.rr(tx, ty, tx + tw, ty + th, 20 * k, mix(T["panel"], T["accent"], 0.12) if on else mix(T["panel"], T["bg"], 0.1))
+            self.text(tx + 22 * k, ty + 22 * k, title, self.font(19 * k, True), T["text"], maxw=tw - 44 * k)
+            for j, line in enumerate(self.wrap(sub, self.font(14 * k), tw - 44 * k)[:5]):
+                self.text(tx + 22 * k, ty + 58 * k + j * 21 * k, line, self.font(14 * k), T["muted"])
+            if badge:
+                f = self.font(13 * k, True)
+                w = f.measure(badge) + 26 * k
+                self.rr(tx + 22 * k, ty + th - 54 * k, tx + 22 * k + w, ty + th - 22 * k, 16 * k, T["accent"] if on else T["panel2"])
+                self.text(tx + 22 * k + w / 2, ty + th - 38 * k, badge, f, on_color(T["accent"]) if on else T["muted"], anchor="center")
+            self.region(rid, tx, ty, tx + tw, ty + th, fn)
+
+    def page_header(self, title, sub=None):
+        T, k = self.t, self.k
+        self.button("pg_back", 32 * k, 26 * k, 140 * k, 68 * k, "‹  BACK", self.close_page, "ghost")
+        self.text(160 * k, 47 * k, title, self.font(22 * k, True), T["text"], anchor="w")
+        if sub:
+            self.text(160 * k, 80 * k, sub, self.font(14 * k), T["muted"], anchor="w", maxw=self.W - 220 * k)
+
+    def chip_row(self, prefix, x, y, items, cur, fn, x1=None):
+        T, k = self.t, self.k
+        f = self.font(14 * k, True)
+        for val, lab in items:
+            w = f.measure(lab) + 30 * k
+            if x1 and x + w > x1:
+                break
+            on = val == cur
+            self.rr(x, y, x + w, y + 38 * k, 19 * k, T["accent"] if on else T["panel2"])
+            self.text(x + w / 2, y + 19 * k, lab, f, on_color(T["accent"]) if on else T["text"], anchor="center")
+            self.region(f"{prefix}_{val}", x, y, x + w, y + 38 * k, lambda v=val: fn(v))
+            x += w + 8 * k
+        return x
+
+    # battery goal page
+    def draw_goal(self):
+        T, k = self.t, self.k
+        x0, x1 = 48 * k, self.W - 48 * k
+        self.page_header("BATTERY GOAL", "Pick how long you want to play. Vanta works out whether the battery makes it.")
+        y = 120 * k
+        left = (self.cfg["batt_goal"] - time.time()) / 3600 if self.cfg["batt_goal"] else None
+        opts = [(0, "Off"), (1, "1 hour"), (1.5, "1h 30m"), (2, "2 hours"), (2.5, "2h 30m"), (3, "3 hours"), (4, "4 hours")]
+        self.chip_row("goal", x0, y, opts, None if left is None else min(opts[1:], key=lambda o: abs(o[0] - left))[0] if left > 0 else 0,
+                      self.set_goal, x1)
+        y += 64 * k
+        head, lines, state = self.goal_text()
+        if head:
+            self.rr(x0, y, x1, y + 70 * k + len(lines) * 30 * k, 20 * k, mix(T["panel"], T["bg"], 0.1))
+            self.text(x0 + 24 * k, y + 20 * k, head, self.font(26 * k, True), T.get(state, T["text"]) if state else T["text"])
+            for i, line in enumerate(lines):
+                self.text(x0 + 24 * k, y + 66 * k + i * 30 * k, line, self.font(16 * k), T["text"] if i < 2 else T["muted"], maxw=x1 - x0 - 48 * k)
+            y += 90 * k + len(lines) * 30 * k
+        else:
+            self.text(x0, y, "No goal set.", self.font(18 * k), T["muted"])
+            y += 50 * k
+        # per-game battery life from what Vanta has measured
+        known = sorted(((pw[0] / pw[1], aid) for aid, pw in self.cfg["power"].items() if pw[1] >= 60))
+        b = (self.stats or {}).get("batt") or {}
+        if known and b.get("full_wh"):
+            self.text(x0, y, "HOW LONG A FULL CHARGE LASTS, BY GAME", self.font(13 * k, True), T["muted"])
+            y += 30 * k
+            for w, aid in known[:8]:
+                g = self.game_by_appid(aid)
+                self.rr(x0, y, x1, y + 46 * k, 12 * k, mix(T["panel"], T["bg"], 0.1))
+                self.text(x0 + 18 * k, y + 23 * k, g["name"] if g else f"App {aid}", self.font(15 * k, True), T["text"], anchor="w",
+                          maxw=(x1 - x0) * 0.5)
+                self.text(x1 - 18 * k, y + 23 * k, f"{w:.1f} W  ·  about {dc.fmt_duration(b['full_wh'] / w * 3600)}", self.font(15 * k),
+                          T["text"], anchor="e")
+                y += 52 * k
+                if y > self.H - 60 * k:
+                    break
+        self.text(x0, self.H - 30 * k, "Vanta can't change power limits itself on SteamOS: it tells you what to set in Steam's Performance menu.",
+                  self.font(12.5 * k), T["muted"], maxw=x1 - x0)
+
+    # phone app page
+    def draw_remote(self):
+        T, k = self.t, self.k
+        x0, x1 = 48 * k, self.W - 48 * k
+        self.page_header("PHONE APP", "Open Vanta Deck on your phone: same Wi-Fi, any browser.")
+        y = 120 * k
+        on = bool(self.remote)
+        self.button("rm_toggle", x0, y, x0 + 260 * k, y + 54 * k, "TURN OFF" if on else "TURN ON", lambda: self.set_remote(not on),
+                    "normal" if on else "accent")
+        y += 84 * k
+        if on:
+            ip = getattr(self, "remote_ip", None) or "your-deck-ip"
+            self.rr(x0, y, x1, y + 200 * k, 20 * k, mix(T["panel"], T["bg"], 0.1))
+            self.text(x0 + 24 * k, y + 22 * k, "ON YOUR PHONE, OPEN", self.font(13 * k, True), T["muted"])
+            self.text(x0 + 24 * k, y + 46 * k, f"http://{ip}:{deck_remote.PORT}", self.font(34 * k, True), T["accent"])
+            self.text(x0 + 24 * k, y + 110 * k, "PIN", self.font(13 * k, True), T["muted"])
+            self.text(x0 + 24 * k, y + 134 * k, " ".join(self.cfg["remote_pin"]), self.font(34 * k, True), T["text"])
+            self.button("rm_newpin", x1 - 220 * k, y + 134 * k, x1 - 24 * k, y + 176 * k, "NEW PIN",
+                        lambda: self.confirm("newpin", self.new_pin, "Tap again: phones will need the new PIN"), "normal", 13)
+            y += 230 * k
+            self.text(x0, y, "Your phone can see stats and your games, start a game, run Game Boost and look at your screenshots. "
+                      "Nothing leaves your home network.", self.font(15 * k), T["muted"], maxw=x1 - x0)
+        else:
+            self.text(x0, y, "Off. When it's on, phones on your Wi-Fi with the PIN can see your stats and start games.",
+                      self.font(16 * k), T["muted"], maxw=x1 - x0)
+
+    def new_pin(self):
+        self.cfg["remote_pin"] = f"{random.SystemRandom().randint(0, 999999):06d}"
+        self.redraw()
+
+    # startup apps
+    def load_startup(self):
+        try:
+            self.startup = dc.startup_apps()
+        except Exception:
+            self.startup = []
+
+    def flip_startup(self, it):
+        if dc.set_startup(it, not it["on"]):
+            self.show_toast(f"{it['name']} {'starts with Desktop Mode again' if not it['on'] else 'no longer starts with Desktop Mode'}")
+        else:
+            self.show_toast(f"Couldn't change {it['name']}")
+        self.load_startup()
+        self.redraw()
+
+    def draw_startup(self):
+        T, k = self.t, self.k
+        x0, x1 = 48 * k, self.W - 48 * k
+        self.page_header("STARTUP APPS", "Apps that open by themselves in Desktop Mode. Game Mode doesn't run these.")
+        y = 120 * k
+        items = self.startup or []
+        if not items:
+            self.text(x0, y, "Nothing starts with Desktop Mode.", self.font(17 * k), T["good"])
+            return
+        for i, it in enumerate(items[:12]):
+            self.rr(x0, y, x1, y + 56 * k, 14 * k, mix(T["panel"], T["bg"], 0.1))
+            self.text(x0 + 18 * k, y + 28 * k, it["name"], self.font(16 * k, True), T["text"] if it["on"] else T["muted"], anchor="w",
+                      maxw=(x1 - x0) * 0.6)
+            self.button(f"su_{i}", x1 - 150 * k, y + 9 * k, x1 - 12 * k, y + 47 * k, "ON" if it["on"] else "OFF",
+                        lambda it_=it: self.flip_startup(it_), "accent" if it["on"] else "normal", 13)
+            y += 64 * k
+        self.text(x0, self.H - 30 * k, "Turned-off apps are kept in Vanta's folder, so turning them back on restores them exactly.",
+                  self.font(12.5 * k), T["muted"])
+
+    # controller test
+    def draw_pad(self):
+        T, k = self.t, self.k
+        x0, x1 = 48 * k, self.W - 48 * k
+        self.page_header("CONTROLLER TEST", "Press buttons and move the sticks. Press B twice to leave.")
+        raw = getattr(self.joy, "raw", {"buttons": {}, "axes": {}})
+        if not getattr(self, "_pad_timer", False):
+            self._pad_timer = True
+
+            def again():
+                self._pad_timer = False
+                if self.page and self.page[0] == "pad":
+                    self.redraw()
+            self.root.after(70, again)
+        y = 120 * k
+        if not self.joy.name:
+            self.text(x0, y, "No controller found. In Desktop Mode Steam may be turning the controls into a mouse and keyboard: "
+                      "this test works best in Game Mode.", self.font(16 * k), T["warn"], maxw=x1 - x0)
+            y += 60 * k
+        else:
+            self.text(x0, y, f"Reading {self.joy.name}", self.font(14 * k), T["muted"])
+            y += 34 * k
+        names = {0: "A", 1: "B", 2: "X", 3: "Y", 4: "L1", 5: "R1", 6: "View", 7: "Menu", 8: "Steam", 9: "L3", 10: "R3",
+                 11: "Left", 12: "Right", 13: "Up", 14: "Down"}
+        bx = x0
+        for num in sorted(set(names) | set(raw["buttons"])):
+            on = raw["buttons"].get(num)
+            lab = names.get(num, f"B{num}")
+            w = max(64 * k, self.font(15 * k, True).measure(lab) + 30 * k)
+            if bx + w > x1:
+                bx = x0
+                y += 56 * k
+            self.rr(bx, y, bx + w, y + 46 * k, 14 * k, T["accent"] if on else T["panel2"])
+            self.text(bx + w / 2, y + 23 * k, lab, self.font(15 * k, True), on_color(T["accent"]) if on else T["text"], anchor="center")
+            bx += w + 10 * k
+        y += 80 * k
+        sticks = [("Left stick", 0, 1), ("Right stick", 3, 4)]
+        R = 90 * k
+        for i, (lab, ax, ay) in enumerate(sticks):
+            cx = x0 + R + 20 * k + i * (2 * R + 120 * k)
+            cy = y + R + 30 * k
+            self.text(cx, y, lab, self.font(14 * k, True), T["muted"], anchor="n")
+            self.c.create_oval(cx - R, cy - R, cx + R, cy + R, outline=T["line"], width=2, fill=mix(T["panel"], T["bg"], 0.1))
+            self.c.create_oval(cx - R * 0.08, cy - R * 0.08, cx + R * 0.08, cy + R * 0.08, outline=T["muted"])
+            vx, vy = raw["axes"].get(ax, 0) / 32767, raw["axes"].get(ay, 0) / 32767
+            px, py = cx + vx * R, cy + vy * R
+            self.c.create_oval(px - 12 * k, py - 12 * k, px + 12 * k, py + 12 * k, fill=T["accent"], outline="")
+            dist = min(1, math.hypot(vx, vy))
+            self.text(cx, cy + R + 14 * k, f"{dist * 100:.0f}% off center" + ("  ·  drift?" if 0.08 < dist < 0.3 else ""),
+                      self.font(13.5 * k), T["warn"] if 0.08 < dist < 0.3 else T["muted"], anchor="n")
+        tx = x0 + 4 * (R + 60 * k) + 40 * k
+        for i, (lab, ax) in enumerate((("L2", 2), ("R2", 5))):
+            v = (raw["axes"].get(ax, -32767) + 32767) / 65534
+            yy = y + 40 * k + i * 70 * k
+            self.text(tx, yy, lab, self.font(14 * k, True), T["muted"])
+            self.rr(tx + 50 * k, yy, x1, yy + 26 * k, 13 * k, T["panel2"])
+            self.rr(tx + 50 * k, yy, tx + 50 * k + (x1 - tx - 50 * k) * max(0.02, v), yy + 26 * k, 13 * k, T["accent"])
+        self.text(x0, self.H - 30 * k, "A stick that sits more than 8% off center when you're not touching it is drifting: "
+                  "Steam › Settings › Controller › Calibration fixes most of it.", self.font(12.5 * k), T["muted"], maxw=x1 - x0)
+
+    # backups
+    def load_backups(self):
+        try:
+            self.backups = dc.backups()
+        except Exception:
+            self.backups = []
+
+    def make_backup(self):
+        try:
+            p = dc.backup(dict(self.cfg))
+            self.show_toast(f"Saved to Documents › Vanta Deck backups › {os.path.basename(p)}")
+        except OSError as e:
+            self.show_toast(f"Couldn't save the backup: {e.strerror}")
+        self.load_backups()
+        self.redraw()
+
+    def restore(self, path):
+        data = dc.read_backup(path)
+        if not data:
+            self.show_toast("That file isn't a Vanta Deck backup")
+            return
+        pin = self.cfg["remote_pin"]
+        for k_, v in data.items():
+            if k_ in dc.DEFAULTS and (dc.DEFAULTS[k_] is None or type(v) is type(dc.DEFAULTS[k_])):
+                self.cfg[k_] = v
+        self.cfg["remote_pin"] = pin
+        self.cfg["paused"] = []
+        self.fx = None
+        self.imgs = {}
+        self.show_toast("Restored: notes, ratings, sessions and settings are back")
+        self.redraw()
+
+    def draw_backup(self):
+        T, k = self.t, self.k
+        x0, x1 = 48 * k, self.W - 48 * k
+        self.page_header("BACKUP & RESTORE", "Notes, ratings, sessions, badges and settings. Saved in Documents › Vanta Deck backups.")
+        y = 120 * k
+        self.button("bk_make", x0, y, x0 + 280 * k, y + 54 * k, "MAKE A BACKUP", self.make_backup, "accent")
+        y += 84 * k
+        items = self.backups or []
+        if not items:
+            self.text(x0, y, "No backups yet.", self.font(16 * k), T["muted"])
+        for i, p in enumerate(items[:8]):
+            self.rr(x0, y, x1, y + 56 * k, 14 * k, mix(T["panel"], T["bg"], 0.1))
+            try:
+                when = time.strftime("%b %d %Y, %H:%M", time.localtime(os.path.getmtime(p)))
+            except OSError:
+                when = "?"
+            self.text(x0 + 18 * k, y + 28 * k, when, self.font(16 * k, True), T["text"], anchor="w")
+            self.text(x0 + 320 * k, y + 28 * k, os.path.basename(p), self.font(13.5 * k), T["muted"], anchor="w", maxw=(x1 - x0) * 0.45)
+            key = "rs_" + p
+            armed = self.is_armed(key)
+            self.button(f"rs_{i}", x1 - 170 * k, y + 9 * k, x1 - 12 * k, y + 47 * k, "TAP AGAIN" if armed else "RESTORE",
+                        lambda p_=p, k_=key: self.confirm(k_, lambda: self.restore(p_), "Tap again: this replaces what's in Vanta now"),
+                        "danger" if armed else "normal", 13)
+            y += 64 * k
+        self.text(x0, self.H - 30 * k, "The phone app PIN is never saved in a backup.", self.font(12.5 * k), T["muted"])
+
+    # themes page
+    def draw_themes(self):
+        T, k = self.t, self.k
+        x0, x1 = 48 * k, self.W - 48 * k
+        self.page_header("THEMES", f"{len(THEMES)} themes  ·  ✦ moves gently")
+        y = 112 * k
+        x = self.chip_row("tf", x0, y, [("all", "All"), ("anim", "Animated"), ("dark", "Dark"), ("light", "Light")], self.theme_filter,
+                          lambda v: (setattr(self, "theme_filter", v), self.scroll.__setitem__("themes", 0), self.redraw()))
+        if self.cfg["day_night"]:
+            x += 20 * k
+            self.chip_row("ts", x, y, [("main", f"Night: {self.cfg['theme']}"), ("day", f"Day: {self.cfg['day_theme']}")], self.theme_slot,
+                          lambda v: (setattr(self, "theme_slot", v), self.redraw()), x1)
+        names = [n for n, t in THEMES.items() if self.theme_filter == "all" or (self.theme_filter == "anim" and t.get("fx"))
+                 or (self.theme_filter == "dark" and not t.get("light")) or (self.theme_filter == "light" and t.get("light"))]
+        gy = y + 56 * k
+        cols, gap = 5, 12 * k
+        tw = (x1 - x0 - gap * (cols - 1)) / cols
+        th = 80 * k
+        cur = self.cfg["day_theme"] if self.theme_slot == "day" and self.cfg["day_night"] else self.cfg["theme"]
+        off = self.clamp_scroll("themes", math.ceil(len(names) / cols) * (th + gap) - (self.H - gy - 20 * k))
+        for i, name in enumerate(names):
+            th_ = THEMES[name]
+            r_, cn = divmod(i, cols)
+            tx, ty = x0 + cn * (tw + gap), gy + r_ * (th + gap) - off
+            if ty < gy - 2 or ty + th > self.H:
+                continue
+            bg = th_["grad"][0] if th_.get("grad") else th_["bg"]
+            self.rr(tx, ty, tx + tw, ty + th, 14 * k, bg, outline=T["accent"] if name == cur else th_["line"],
+                    width=max(2, 3 * k) if name == cur else 1)
+            self.rr(tx + 12 * k, ty + 12 * k, tx + 46 * k, ty + 30 * k, 9 * k, th_["accent"])
+            self.rr(tx + 52 * k, ty + 12 * k, tx + 72 * k, ty + 30 * k, 9 * k, th_["accent2"])
+            self.text(tx + 12 * k, ty + 44 * k, name + ("  ✦" if th_.get("fx") else ""), self.font(14 * k, True), th_["text"], maxw=tw - 20 * k)
+            self.region("th_" + name, tx, ty, tx + tw, ty + th, lambda n=name: self.set_theme(n), scroll="themes")
+        self.region("themes_scroll", x0, gy, x1, self.H, None, scroll="themes")
 
     # ------------------------------------------------------------------ Storage
     def draw_storage(self, x0, y0, x1, y1):
@@ -1547,6 +2242,19 @@ class App:
             for i, it in enumerate(caches[:12]):
                 y = self.cleanup_row(it, 100 + i, x0, y, x1, leftover=False)
         y += 16 * k
+        dups = dc.duplicates(self.library)
+        if dups:
+            self.text(x0, y, "INSTALLED TWICE", self.font(13 * k, True), T["muted"])
+            y += 28 * k
+            for i, grp in enumerate(dups[:6]):
+                self.rr(x0, y, x1, y + 52 * k, 14 * k, mix(T["panel"], T["bg"], 0.1))
+                self.text(x0 + 18 * k, y + 26 * k, grp[0]["name"], self.font(15 * k, True), T["text"], anchor="w", maxw=(x1 - x0) * 0.4)
+                where = "  and  ".join(f"{g['source']}" + (f" ({dc.fmt_bytes(g['size'])})" if g["size"] else "") for g in grp)
+                self.text(x0 + (x1 - x0) * 0.45, y + 26 * k, where + "  ·  you only need one", self.font(14 * k), T["warn"], anchor="w",
+                          maxw=(x1 - x0) * 0.53)
+                self.region(f"dup_{i}", x0, y, x1, y + 52 * k, lambda gid=grp[0]["id"]: self.open_game(gid))
+                y += 60 * k
+            y += 10 * k
         # biggest games
         self.text(x0, y, "BIGGEST GAMES", self.font(13 * k, True), T["muted"])
         y += 28 * k
@@ -1659,26 +2367,17 @@ class App:
         T, k = self.t, self.k
         off = self.scroll.get("settings", 0)
         y = y0 - off
-        self.text(x0, y, "THEME", self.font(13 * k, True), T["muted"])
-        y += 28 * k
-        names = list(THEMES)
-        cols = 4
-        gap = 14 * k
-        tw = (x1 - x0 - gap * (cols - 1)) / cols
-        for i, name in enumerate(names):
-            th_ = THEMES[name]
-            r_, cn = divmod(i, cols)
-            tx, ty = x0 + cn * (tw + gap), y + r_ * (86 * k + gap)
-            self.rr(tx, ty, tx + tw, ty + 86 * k, 16 * k, th_["bg"], outline=T["accent"] if name == self.cfg["theme"] else th_["line"],
-                    width=max(2, 3 * k) if name == self.cfg["theme"] else 1)
-            self.rr(tx + 14 * k, ty + 14 * k, tx + 54 * k, ty + 34 * k, 10 * k, th_["accent"])
-            self.rr(tx + 60 * k, ty + 14 * k, tx + 84 * k, ty + 34 * k, 10 * k, th_["accent2"])
-            self.text(tx + 14 * k, ty + 50 * k, name + ("  ✦" if th_.get("fx") else ""), self.font(15 * k, True), th_["text"])
-            self.region("th_" + name, tx, ty, tx + tw, ty + 86 * k, lambda n=name: self.set_theme(n))
-        y += math.ceil(len(names) / cols) * (86 * k + gap) + 14 * k
+        y = self.setting_row(x0, y, x1, "Theme", f"{len(THEMES)} themes, {sum(1 for t in THEMES.values() if t.get('fx'))} of them animated",
+                             f"{self.cfg['theme']}  ›", lambda: self.open_page("themes"), True)
+        a, b = self.cfg["day_hours"]
+        y = self.setting_row(x0, y, x1, "Day & night", f"Use {self.cfg['day_theme']} from {a}:00 to {b}:00 (pick it on the Themes page)",
+                             "ON" if self.cfg["day_night"] else "OFF", lambda: self.set_cfg("day_night", not self.cfg["day_night"]),
+                             self.cfg["day_night"])
         rows = [("animations", "Animated backgrounds", "Themes marked ✦ move gently. Off saves a little battery.", self.cfg["animations"]),
                 ("fahrenheit", "Temperatures in °F", "System shows °C otherwise", self.cfg["fahrenheit"]),
-                ("art_fetch", "Download missing covers", "From Steam's public image server", self.cfg["art_fetch"])]
+                ("art_fetch", "Download missing covers", "From Steam's public image server", self.cfg["art_fetch"]),
+                ("stores", "Games from Heroic and Lutris", "Epic, GOG and Amazon games installed with Heroic, and Lutris games",
+                 self.cfg["stores"])]
         for key, title, sub, on in rows:
             y = self.setting_row(x0, y, x1, title, sub, "ON" if on else "OFF", lambda k_=key: self.set_cfg(k_, not self.cfg[k_]), on)
         starts = [t for t, _ in TABS[:4]]
@@ -1712,7 +2411,7 @@ class App:
         return y + 80 * k
 
     def set_theme(self, name):
-        self.cfg["theme"] = name
+        self.cfg["day_theme" if self.theme_slot == "day" and self.cfg["day_night"] else "theme"] = name
         self.fx = None
         self.imgs = {k_: v for k_, v in self.imgs.items() if k_[0] not in ("bd", "hero")}
         self.redraw()
@@ -1734,7 +2433,8 @@ class App:
             return
         if not self.fx or self.fx["key"] != (kind, W, H, self.cfg["theme"]):
             rnd = random.Random(7)
-            n = {"stars": 46, "petals": 26, "orbs": 5, "glow": 0, "snow": 60, "embers": 34, "fireflies": 22}.get(kind, 0)
+            n = {"stars": 46, "petals": 26, "orbs": 5, "aurora": 4, "waves": 4, "glow": 0, "snow": 60, "embers": 34, "fireflies": 22,
+                 "rain": 70, "bubbles": 26, "confetti": 40, "grid": 12, "scan": 1}.get(kind, 0)
             self.fx = {"key": (kind, W, H, self.cfg["theme"]), "kind": kind, "t": time.time(),
                        "p": [dict(x=rnd.random() * W, y=rnd.random() * H, r=rnd.random(), ph=rnd.random() * 6.3,
                                   v=0.4 + rnd.random()) for _ in range(n)]}
@@ -1758,6 +2458,32 @@ class App:
             elif kind == "fireflies":
                 spr = self.orb(int((14 + p["r"] * 12) * k), T["accent"] if p["r"] > 0.3 else T["accent2"], strong=True)
                 iid = self.c.create_image(p["x"], p["y"], image=spr) if spr else None
+            elif kind == "rain":
+                ln = (14 + p["r"] * 14) * k
+                iid = self.c.create_line(p["x"], p["y"], p["x"] - ln * 0.18, p["y"] + ln, fill=mix(T["bg"], T["accent2"], 0.25 + p["r"] * 0.3),
+                                         width=max(1, 1.2 * k))
+            elif kind == "bubbles":
+                r = (4 + p["r"] * 10) * k
+                iid = self.c.create_oval(p["x"] - r, p["y"] - r, p["x"] + r, p["y"] + r, outline=mix(T["bg"], T["accent2"], 0.45),
+                                         width=max(1, 1.4 * k))
+            elif kind == "confetti":
+                w, h = (4 + p["r"] * 4) * k, (7 + p["r"] * 5) * k
+                col = (T["accent"], T["accent2"], T["warn"], T["good"], T["danger"])[int(p["ph"] * 10) % 5]
+                iid = self.c.create_rectangle(p["x"], p["y"], p["x"] + w, p["y"] + h, fill=mix(T["bg"], col, 0.7), outline="")
+            elif kind == "grid":
+                hz = H * 0.58
+                if p is self.fx["p"][0]:  # the fixed rays, drawn once with the first line
+                    for i in range(-8, 9):
+                        rid_ = self.c.create_line(W / 2 + i * W * 0.02, hz, W / 2 + i * W * 0.16, H, fill=mix(T["bg"], T["accent"], 0.22))
+                        self.c.tag_lower(rid_)
+                f_ = (self.fx["p"].index(p) / len(self.fx["p"]))
+                p["f"] = f_
+                y_ = hz + (H - hz) * f_ * f_
+                p["x"], p["y"] = 0, y_
+                iid = self.c.create_line(0, y_, W, y_, fill=mix(T["bg"], T["accent"], 0.3))
+            elif kind == "scan":
+                p["y"] = -40 * k
+                iid = self.c.create_rectangle(0, p["y"], W, p["y"] + 70 * k, fill=mix(T["bg"], T["accent"], 0.07), outline="")
             else:
                 spr = self.orb(int((140 + p["r"] * 120) * k), T["accent"] if p["r"] > 0.5 else T["accent2"])
                 iid = self.c.create_image(p["x"], p["y"], image=spr) if spr else None
@@ -1818,6 +2544,33 @@ class App:
                     elif up and p["y"] < -10:
                         p["y"] += H + 20
                         dy += H + 20
+                elif fx["kind"] in ("rain", "confetti", "bubbles"):
+                    sp = {"rain": 420, "confetti": 40, "bubbles": -30}[fx["kind"]]
+                    dy = sp * (0.6 + p["v"] * 0.5) * k * dt
+                    dx = (-dy * 0.18 if fx["kind"] == "rain" else math.sin(now * 1.3 + p["ph"]) * 16 * k * dt)
+                    p["x"] += dx
+                    p["y"] += dy
+                    if dy > 0 and p["y"] > H + 30:
+                        p["y"] -= H + 60
+                        dy -= H + 60
+                    elif dy < 0 and p["y"] < -30:
+                        p["y"] += H + 60
+                        dy += H + 60
+                    if p["x"] < -30:
+                        p["x"] += W + 60
+                        dx += W + 60
+                elif fx["kind"] == "grid":
+                    p["f"] = (p["f"] + 0.05 * dt) % 1.0
+                    hz = H * 0.58
+                    ny = hz + (H - hz) * p["f"] * p["f"]
+                    dx, dy = 0, ny - p["y"]
+                    p["y"] = ny
+                elif fx["kind"] == "scan":
+                    dx, dy = 0, 90 * k * dt
+                    p["y"] += dy
+                    if p["y"] > H:
+                        p["y"] -= H + 80 * k
+                        dy -= H + 80 * k
                 elif fx["kind"] == "fireflies":
                     a = now * 0.35 * p["v"] + p["ph"]
                     nx = p.setdefault("cx", p["x"]) + math.sin(a) * 70 * k + math.sin(a * 2.3) * 20 * k
@@ -1889,15 +2642,24 @@ class App:
 
     def default_focus(self):
         if self.page:
-            return {"game": "gp_play", "shot": "sv_next", "ram": "ram_rescan"}.get(self.page[0])
+            return {"game": "gp_play", "shot": "sv_next", "ram": "ram_auto", "goal": "goal_0", "remote": "rm_toggle",
+                    "startup": "su_0", "pad": "pg_back", "backup": "bk_make", "themes": "th_" + self.cfg["theme"]}.get(self.page[0])
         return {"home": "home_play", "library": next((r["id"] for r in self.regions if r["id"].startswith("g_")), None),
                 "play": "pr_" + self.cfg["play_range"], "shots": next((r["id"] for r in self.regions if r["id"].startswith("sh_")), None),
-                "storage": "scan", "system": "sys_ram", "settings": "th_" + self.cfg["theme"]}.get(self.tab)
+                "storage": "scan", "system": "sys_ram", "tools": "tool_boost", "settings": "set_Theme"}.get(self.tab)
 
     def on_pad(self, b):
         if self.entry:
             if b == "b":
                 self.hide_entry()
+            return
+        if self.page and self.page[0] == "pad":
+            if b == "b" and getattr(self, "_pad_b", 0) > time.time() - 1.5:
+                self.close_page()
+            else:
+                self._pad_b = time.time() if b == "b" else 0
+                if b == "b":
+                    self.show_toast("Press B again to leave")
             return
         if self.page and self.page[0] == "shot" and b in ("left", "right", "lb", "rb"):
             self.step_shot(-1 if b in ("left", "lb") else 1)
@@ -1958,7 +2720,7 @@ class App:
 
     def reveal(self, r):
         """Scroll so the focused item is on screen."""
-        key = ({"game": "game", "ram": "ram"}.get(self.page[0]) if self.page else
+        key = ({"game": "game", "ram": "ram", "themes": "themes"}.get(self.page[0]) if self.page else
                {"library": "lib", "storage": "storage", "settings": "settings", "play": "play", "shots": "shots"}.get(self.tab))
         if not key:
             return
@@ -1973,6 +2735,18 @@ def main():
     app = App()
     if os.environ.get("VANTA_TAB"):  # tests
         app.root.after(1500, lambda: app.set_tab(os.environ["VANTA_TAB"]))
+    if os.environ.get("VANTA_PAGE"):  # tests: open a Tools page
+        def _pg():
+            pg = os.environ["VANTA_PAGE"]
+            if pg == "ram":
+                app.open_ram()
+            else:
+                if pg == "startup":
+                    app.load_startup()
+                if pg == "backup":
+                    app.load_backups()
+                app.open_page(pg)
+        app.root.after(2500, _pg)
     if os.environ.get("VANTA_OPEN"):
         app.root.after(2500, lambda: app.open_game(os.environ["VANTA_OPEN"]))
     if os.environ.get("VANTA_PADSEQ"):

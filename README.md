@@ -30,19 +30,25 @@ build.bat           :: Vanta.exe and VantaGo.exe (run as administrator)
 build-preview.bat   :: Preview builds that never change the PC
 ```
 
-## Vanta Deck for SteamOS (1.1)
+## Vanta Deck for SteamOS (1.2)
 
 ![Vanta Deck](docs/steamos.png)
 
-- **Library:** your Steam and non-Steam games with Steam's own covers, search, "Surprise me" and your ratings.
+- **Library:** Steam games, non-Steam shortcuts, Heroic (Epic, GOG, Amazon) and Lutris games, with search, "Surprise me" and your ratings.
 - **Game pages:** Deck Verified and ProtonDB ratings, reviews, news, notes, battery life for that game, its Proton version and launch options, screenshots.
 - **Play:** a 20-week play calendar, totals, most played, a monthly wrap and badges.
 - **Shots:** all your Steam screenshots, by game.
-- **Storage:** cleanup of shader caches and Proton folders left by uninstalled games (moved to the Trash).
-- **System:** live battery, CPU, GPU, temperature and fan stats, plus **Free up RAM**, which closes background apps you pick. Steam, Game Mode and your running game are never listed.
-- **16 themes**, 9 of them animated.
+- **Storage:** cleanup of leftovers from uninstalled games (moved to the Trash), shader caches, and games installed twice.
+- **Tools:**
+  - **Game Boost:** closes or freezes the apps you pick, automatically when a game starts and when memory runs low. Frozen apps wake up when you stop playing.
+  - **Battery goal:** says whether the battery lasts until when you want, and what TDP to set.
+  - **Phone app:** stats, your games, Game Boost and screenshots in your phone's browser, behind a PIN.
+  - Startup apps, controller test, backup & restore, guest mode, TV mode.
+- **67 themes** (all of the Windows ones), 26 animated, with day & night switching.
 
-It only reads Steam's files. It doesn't change system settings, it moves folders to the Trash only when you tap twice, and it closes an app only when you tap Close twice.
+![Tools](docs/steamos-tools.png)
+
+It doesn't change system settings (TDP, fan and charge limit need the system password on SteamOS). It moves folders to the Trash only when you tap twice, and closes or freezes only the apps you picked.
 
 ### Run from source
 
